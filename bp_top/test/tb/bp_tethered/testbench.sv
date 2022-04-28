@@ -468,6 +468,7 @@ module testbench
            ,.dtlb_r_v_i(be.calculator.pipe_mem.dmmu.tlb.r_v_li)
            );
 
+  `ifndef XCELIUM
       bind bp_core_minimal
         bp_nonsynth_core_profiler
          #(.bp_params_p(bp_params_p))
@@ -566,6 +567,7 @@ module testbench
 
            ,.commit_v_i(calculator.commit_pkt_cast_o.instret)
            );
+`endif
 
       bind bp_me_clint_slice
         bp_me_nonsynth_dev_tracer

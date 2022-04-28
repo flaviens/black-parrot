@@ -1,0 +1,97 @@
+override TOOL := xcelium
+
+override LOG_DIR     := $(LOG_PATH)/$(TOOL)
+override RESULTS_DIR := $(RESULTS_PATH)/$(TOOL)
+override REPORT_DIR  := $(REPORT_PATH)/$(TOOL)
+override TOUCH_DIR   := $(TOUCH_PATH)/$(TOOL)
+
+override LINT_DIR  := $(RESULTS_DIR)/$(TB).$(CFG).$(TAG).lint
+override BUILD_DIR := $(RESULTS_DIR)/$(TB).$(CFG).$(TAG).build
+override SIM_DIR   := $(RESULTS_DIR)/$(TB).$(CFG).$(TAG).sim.$(SUITE).$(PROG)
+override COV_DIR   := $(RESULTS_DIR)/$(TB).$(CFG).$(TAG).cov
+$(TOUCH_DIR) $(RESULTS_DIR) $(LOG_DIR) $(REPORT_DIR) $(LINT_DIR) $(BUILD_DIR) $(SIM_DIR) $(COV_DIR):
+	mkdir -p $@
+
+.PHONY: clean.x lint.x build.x sim.x cov.x
+
+include $(TB_PATH)/$(TB)/Makefile.xcelium
+
+## Tool specific options
+XRUN_FLAGS += -elaborate -notimingchecks
+XRUN_FLAGS += -sv -64bit -timescale 1ps/1ps
+XRUN_FLAGS += +lint=all,noSVA-UA,noSVA-NSVU,noVCDE,noNS
+XRUN_FLAGS += -elaborate
+XRUN_FLAGS += -f flist.vcs
+XRUN_FLAGS += -top testbench
+XRUN_FLAGS += -xmlibdirname xcelium.d 
+
+XRUN_CFLAGS += "-I$(BASEJUMP_STL_DIR)/imports/DRAMSim3/src"
+XRUN_CFLAGS += "-I$(BASEJUMP_STL_DIR)/imports/DRAMSim3/ext/headers"
+XRUN_CFLAGS += "-I$(BASEJUMP_STL_DIR)/imports/DRAMSim3/ext/fmt/include"
+XRUN_CFLAGS += "-I$(BASEJUMP_STL_DIR)/bsg_test"
+XRUN_CFLAGS += "-DBASEJUMP_STL_DIR=$(BASEJUMP_STL_DIR)"
+XRUN_CFLAGS += "-I$(BP_TOOLS_DIR)/install/include"
+#XRUN_CFLAGS += $(BP_TOOLS_INSTALL_DIR)/lib/libdromajo_cosim.a
+
+XMSIM_FLAGS += worklib.testbench
+
+XCELIUM_PLUSARGS  =
+
+lint.x:
+	$(error Lint is not supported by Xcelium)
+
+build.x: $(BUILD_DIR)/simx
+build.x: BUILD_LOG    := $(LOG_DIR)/$(TB).$(CFG).$(TAG).build.log
+build.x: BUILD_REPORT := $(REPORT_DIR)/$(TB).$(CFG).$(TAG).build.rpt
+build.x: BUILD_ERROR  := $(REPORT_DIR)/$(TB).$(CFG).$(TAG).build.err
+$(BUILD_COLLATERAL): | $(TOUCH_DIR) $(RESULTS_DIR) $(LOG_DIR) $(REPORT_DIR) $(BUILD_DIR)
+$(BUILD_DIR)/simx: | $(BUILD_COLLATERAL)
+	cd $(@D); \
+		$(XRUN) $(XRUN_FLAGS) $(XRUN_CFLAGS) $(subst -pvalue+,-defparam ,$(HDL_PARAMS)) $(HDL_DEFINES) 2>&1 | tee -i $(BUILD_LOG)
+	-@grep "Error" -A5 $(BUILD_LOG) > $(BUILD_ERROR)
+	-@tail -n3 $(BUILD_LOG) > $(BUILD_REPORT)
+	-@test -s $(BUILD_ERROR) && echo "FAILED" >> $(BUILD_REPORT) || rm $(BUILD_ERROR)
+
+build_dump.x: XCELIUM_BUILD_OPTS += -access +rwc
+build_dump.x: build.x
+
+build_cov.x:
+	$(error Coverage is not currently supported for Xcelium)
+
+sim.x: build.x
+sim.x: $(SIM_DIR)/run_simx
+sim.x: SIM_LOG    := $(LOG_DIR)/$(TB).$(CFG).$(TAG).sim.$(SUITE).$(PROG).log
+sim.x: SIM_REPORT := $(REPORT_DIR)/$(TB).$(CFG).$(TAG).sim.$(SUITE).$(PROG).rpt
+sim.x: SIM_ERROR  := $(REPORT_DIR)/$(TB).$(CFG).$(TAG).sim.$(SUITE).$(PROG).err
+$(SIM_COLLATERAL): | $(TOUCH_DIR) $(RESULTS_DIR) $(LOG_DIR) $(REPORT_DIR) $(SIM_DIR)
+$(SIM_DIR)/run_simx: | $(SIM_COLLATERAL)
+	cd $(@D); \
+		$(XMSIM) $(XMSIM_FLAGS) $(XCELIUM_PLUSARGS) 2>&1 | tee -i $(SIM_LOG)
+	-@grep "FAIL" $(SIM_LOG) && echo "FAILED" > $(SIM_ERROR)
+	-@grep "PASS" $(SIM_LOG) || echo "FAILED" > $(SIM_ERROR)
+	-@grep "finish called from file" $(SIM_LOG) || echo "FAILED" > $(SIM_ERROR)
+	-@grep "STATS" -A 3 $(SIM_LOG) > $(SIM_REPORT)
+
+sim_dump.x: XMSIM_FLAGS += $(BP_COMMON_DIR)/syn/tcl/xcelium_dump.tcl
+sim_dump.x: sim.x
+
+sim_cov.x:
+	$(error Coverage is not currently supported for Xcelium)
+
+cov.x:
+	$(error Coverage is not currently supported for Xcelium)
+
+wave.x:
+	$(error Waveform viewing is not currently supported for Xcelium)
+
+# TODO: Make compatible with multi-core
+BLOODGRAPH ?= $(BP_COMMON_DIR)/software/py/blood_graph.py --generate --generate-key
+blood.x:
+	$(error Bloodgraph is not currently supported for Xcelium)
+
+clean.x:
+	@-rm -rf touchfiles/xcelium
+	@-rm -rf results/xcelium
+	@-rm -rf reports/xcelium
+	@-rm -rf logs/xcelium
+

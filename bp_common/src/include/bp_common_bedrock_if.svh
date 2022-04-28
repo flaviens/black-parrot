@@ -126,7 +126,7 @@
       logic                                        prefetch;                           \
       logic                                        uncached;                           \
       logic                                        speculative;                        \
-    } bp_bedrock_mem_payload_s;
+    } bp_bedrock_mem_payload_s
 
   /*
    * BedRock Payload width macros
