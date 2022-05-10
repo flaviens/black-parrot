@@ -76,17 +76,23 @@ module bp_cce
    // CCE-MEM Interface
    // BedRock Stream protocol: ready&valid
    , input [mem_header_width_lp-1:0]                mem_resp_header_i
+   , input                                          mem_resp_header_v_i
+   , output logic                                   mem_resp_header_ready_and_o
+   , input                                          mem_resp_has_data_i
    , input [bedrock_data_width_p-1:0]               mem_resp_data_i
-   , input                                          mem_resp_v_i
-   , output logic                                   mem_resp_ready_and_o
+   , input                                          mem_resp_data_v_i
+   , output logic                                   mem_resp_data_ready_and_o
    , input                                          mem_resp_last_i
 
    , output logic [mem_header_width_lp-1:0]         mem_cmd_header_o
+   , output logic                                   mem_cmd_header_v_o
+   , input                                          mem_cmd_header_ready_and_i
+   , output logic                                   mem_cmd_has_data_o
    , output logic [bedrock_data_width_p-1:0]        mem_cmd_data_o
-   , output logic                                   mem_cmd_v_o
-   , input                                          mem_cmd_ready_and_i
+   , output logic                                   mem_cmd_data_v_o
+   , input                                          mem_cmd_data_ready_and_i
    , output logic                                   mem_cmd_last_o
-  );
+   );
 
   // parameter checks
   if (cce_block_width_p < `bp_cce_inst_gpr_width)
@@ -223,7 +229,7 @@ module bp_cce
   // From memory response stream pump to CCE
   bp_bedrock_mem_header_s mem_resp_base_header_li;
   logic mem_resp_v_li, mem_resp_yumi_lo;
-  logic mem_resp_stream_new_li, mem_resp_stream_last_li, mem_resp_stream_done_li;
+  logic mem_resp_new_li, mem_resp_last_li;
   logic [paddr_width_p-1:0] mem_resp_addr_li;
   logic [bedrock_data_width_p-1:0] mem_resp_data_li;
 
@@ -232,9 +238,9 @@ module bp_cce
   localparam data_len_width_lp = `BSG_SAFE_CLOG2(stream_words_lp);
   bp_bedrock_mem_header_s mem_cmd_base_header_lo;
   logic mem_cmd_v_lo, mem_cmd_ready_and_li;
-  logic mem_cmd_stream_new_li, mem_cmd_stream_done_li;
+  logic mem_cmd_new_li, mem_cmd_last_li;
   logic [bedrock_data_width_p-1:0] mem_cmd_data_lo;
-  logic [data_len_width_lp-1:0] mem_cmd_stream_cnt_li;
+  logic [data_len_width_lp-1:0] mem_cmd_cnt_li;
 
   /*
    * Fetch Stage
@@ -310,9 +316,8 @@ module bp_cce
       ,.fsm_data_o(mem_resp_data_li)
       ,.fsm_v_o(mem_resp_v_li)
       ,.fsm_ready_and_i(mem_resp_yumi_lo)
-      ,.fsm_new_o(mem_resp_stream_new_li)
-      ,.fsm_last_o(mem_resp_stream_last_li)
-      ,.fsm_done_o(mem_resp_stream_done_li)
+      ,.fsm_new_o(mem_resp_new_li)
+      ,.fsm_last_o(mem_resp_last_li)
       );
 
   // Memory Command Stream Pump
@@ -338,10 +343,9 @@ module bp_cce
       ,.fsm_data_i(mem_cmd_data_lo)
       ,.fsm_v_i(mem_cmd_v_lo)
       ,.fsm_ready_and_o(mem_cmd_ready_and_li)
-      ,.fsm_cnt_o(mem_cmd_stream_cnt_li)
-      ,.fsm_new_o(mem_cmd_stream_new_li)
-      ,.fsm_last_o()
-      ,.fsm_done_o(mem_cmd_stream_done_li)
+      ,.fsm_cnt_o(mem_cmd_cnt_li)
+      ,.fsm_new_o(mem_cmd_new_li)
+      ,.fsm_last_o(mem_cmd_last_li)
       );
 
   /*
@@ -708,17 +712,14 @@ module bp_cce
       ,.mem_resp_data_i(mem_resp_data_li)
       ,.mem_resp_v_i(mem_resp_v_li)
       ,.mem_resp_yumi_o(mem_resp_yumi_lo)
-      ,.mem_resp_stream_new_i(mem_resp_stream_new_li)
-      ,.mem_resp_stream_last_i(mem_resp_stream_last_li)
-      ,.mem_resp_stream_done_i(mem_resp_stream_done_li)
+      ,.mem_resp_last_i(mem_resp_last_li)
 
       ,.mem_cmd_header_o(mem_cmd_base_header_lo)
       ,.mem_cmd_data_o(mem_cmd_data_lo)
       ,.mem_cmd_v_o(mem_cmd_v_lo)
       ,.mem_cmd_ready_and_i(mem_cmd_ready_and_li)
-      ,.mem_cmd_stream_cnt_i(mem_cmd_stream_cnt_li)
-      ,.mem_cmd_stream_new_i(mem_cmd_stream_new_li)
-      ,.mem_cmd_stream_done_i(mem_cmd_stream_done_li)
+      ,.mem_cmd_cnt_i(mem_cmd_cnt_li)
+      ,.mem_cmd_last_i(mem_cmd_last_li)
 
       // Inputs
       ,.lce_i(lce_lo)

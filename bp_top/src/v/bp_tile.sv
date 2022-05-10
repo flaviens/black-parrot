@@ -605,21 +605,25 @@ module bp_tile
      );
 
   // CCE-side CCE-Mem network connections
-  bp_bedrock_mem_header_s mem_cmd_header_lo;
-  logic [bedrock_data_width_p-1:0] mem_cmd_data_lo;
-  logic mem_cmd_v_lo, mem_cmd_last_lo, mem_cmd_ready_and_li;
-  bp_bedrock_mem_header_s mem_resp_header_li;
-  logic [bedrock_data_width_p-1:0] mem_resp_data_li;
-  logic mem_resp_v_li, mem_resp_ready_and_lo, mem_resp_last_li;
+  bp_bedrock_mem_header_s proc_cmd_header_lo;
+  logic proc_cmd_header_v_lo, proc_cmd_header_ready_and_li, proc_cmd_has_data_lo;
+  logic [bedrock_data_width_p-1:0] proc_cmd_data_lo;
+  logic proc_cmd_data_v_lo, proc_cmd_data_ready_and_li, proc_cmd_last_lo;
+  bp_bedrock_mem_header_s proc_resp_header_li;
+  logic proc_resp_header_v_li, proc_resp_header_ready_and_lo, proc_resp_has_data_li;
+  logic [bedrock_data_width_p-1:0] proc_resp_data_li;
+  logic proc_resp_data_v_li, proc_resp_data_ready_and_lo, proc_resp_last_li;
 
   // Device-side CCE-Mem network connections
   // dev_cmd[3:0] = {CCE loopback, CLINT, CFG, memory (cache)}
   bp_bedrock_mem_header_s [3:0] dev_cmd_header_li;
+  logic [3:0] dev_cmd_header_v_li, dev_cmd_header_ready_and_lo, dev_cmd_has_data_li;
   logic [3:0][bedrock_data_width_p-1:0] dev_cmd_data_li;
-  logic [3:0] dev_cmd_v_li, dev_cmd_ready_and_lo, dev_cmd_last_li;
+  logic [3:0] dev_cmd_data_v_li, dev_cmd_data_ready_and_lo, dev_cmd_last_li;
   bp_bedrock_mem_header_s [3:0] dev_resp_header_lo;
+  logic [3:0] dev_resp_header_v_lo, dev_resp_header_ready_and_li, dev_resp_has_data_lo;
   logic [3:0][bedrock_data_width_p-1:0] dev_resp_data_lo;
-  logic [3:0] dev_resp_v_lo, dev_resp_ready_and_li, dev_resp_last_lo;
+  logic [3:0] dev_resp_data_v_lo, dev_resp_data_ready_and_li, dev_resp_last_lo;
 
   // Config
   logic cce_ucode_v_lo;
@@ -633,15 +637,21 @@ module bp_tile
      ,.reset_i(reset_r)
 
      ,.mem_cmd_header_i(dev_cmd_header_li[1])
+     ,.mem_cmd_header_v_i(dev_cmd_header_v_li[1])
+     ,.mem_cmd_header_ready_and_o(dev_cmd_header_ready_and_lo[1])
+     ,.mem_cmd_has_data_i(dev_cmd_has_data_li[1])
      ,.mem_cmd_data_i(dev_cmd_data_li[1])
-     ,.mem_cmd_v_i(dev_cmd_v_li[1])
-     ,.mem_cmd_ready_and_o(dev_cmd_ready_and_lo[1])
+     ,.mem_cmd_data_v_i(dev_cmd_data_v_li[1])
+     ,.mem_cmd_data_ready_and_o(dev_cmd_data_ready_and_lo[1])
      ,.mem_cmd_last_i(dev_cmd_last_li[1])
 
      ,.mem_resp_header_o(dev_resp_header_lo[1])
+     ,.mem_resp_header_v_o(dev_resp_header_v_lo[1])
+     ,.mem_resp_header_ready_and_i(dev_resp_header_ready_and_li[1])
+     ,.mem_resp_has_data_o(dev_resp_has_data_lo[1])
      ,.mem_resp_data_o(dev_resp_data_lo[1])
-     ,.mem_resp_v_o(dev_resp_v_lo[1])
-     ,.mem_resp_ready_and_i(dev_resp_ready_and_li[1])
+     ,.mem_resp_data_v_o(dev_resp_data_v_lo[1])
+     ,.mem_resp_data_ready_and_i(dev_resp_data_ready_and_li[1])
      ,.mem_resp_last_o(dev_resp_last_lo[1])
 
      ,.cfg_bus_o(cfg_bus_lo)
@@ -666,15 +676,21 @@ module bp_tile
      ,.cfg_bus_i(cfg_bus_lo)
 
      ,.mem_cmd_header_i(dev_cmd_header_li[2])
+     ,.mem_cmd_header_v_i(dev_cmd_header_v_li[2])
+     ,.mem_cmd_header_ready_and_o(dev_cmd_header_ready_and_lo[2])
+     ,.mem_cmd_has_data_i(dev_cmd_has_data_li[2])
      ,.mem_cmd_data_i(dev_cmd_data_li[2])
-     ,.mem_cmd_v_i(dev_cmd_v_li[2])
-     ,.mem_cmd_ready_and_o(dev_cmd_ready_and_lo[2])
+     ,.mem_cmd_data_v_i(dev_cmd_data_v_li[2])
+     ,.mem_cmd_data_ready_and_o(dev_cmd_data_ready_and_lo[2])
      ,.mem_cmd_last_i(dev_cmd_last_li[2])
 
      ,.mem_resp_header_o(dev_resp_header_lo[2])
+     ,.mem_resp_header_v_o(dev_resp_header_v_lo[2])
+     ,.mem_resp_header_ready_and_i(dev_resp_header_ready_and_li[2])
+     ,.mem_resp_has_data_o(dev_resp_has_data_lo[2])
      ,.mem_resp_data_o(dev_resp_data_lo[2])
-     ,.mem_resp_v_o(dev_resp_v_lo[2])
-     ,.mem_resp_ready_and_i(dev_resp_ready_and_li[2])
+     ,.mem_resp_data_v_o(dev_resp_data_v_lo[2])
+     ,.mem_resp_data_ready_and_i(dev_resp_data_ready_and_li[2])
      ,.mem_resp_last_o(dev_resp_last_lo[2])
 
      ,.debug_irq_o(debug_irq_li)
@@ -692,24 +708,30 @@ module bp_tile
      ,.reset_i(reset_r)
 
      ,.mem_cmd_header_i(dev_cmd_header_li[3])
+     ,.mem_cmd_header_v_i(dev_cmd_header_v_li[3])
+     ,.mem_cmd_header_ready_and_o(dev_cmd_header_ready_and_lo[3])
+     ,.mem_cmd_has_data_i(dev_cmd_has_data_li[3])
      ,.mem_cmd_data_i(dev_cmd_data_li[3])
-     ,.mem_cmd_v_i(dev_cmd_v_li[3])
-     ,.mem_cmd_ready_and_o(dev_cmd_ready_and_lo[3])
+     ,.mem_cmd_data_v_i(dev_cmd_data_v_li[3])
+     ,.mem_cmd_data_ready_and_o(dev_cmd_data_ready_and_lo[3])
      ,.mem_cmd_last_i(dev_cmd_last_li[3])
 
      ,.mem_resp_header_o(dev_resp_header_lo[3])
+     ,.mem_resp_header_v_o(dev_resp_header_v_lo[3])
+     ,.mem_resp_header_ready_and_i(dev_resp_header_ready_and_li[3])
+     ,.mem_resp_has_data_o(dev_resp_has_data_lo[3])
      ,.mem_resp_data_o(dev_resp_data_lo[3])
-     ,.mem_resp_v_o(dev_resp_v_lo[3])
-     ,.mem_resp_ready_and_i(dev_resp_ready_and_li[3])
+     ,.mem_resp_data_v_o(dev_resp_data_v_lo[3])
+     ,.mem_resp_data_ready_and_i(dev_resp_data_ready_and_li[3])
      ,.mem_resp_last_o(dev_resp_last_lo[3])
      );
 
   // Select destination of CCE-Mem command from CCE
-  logic [`BSG_SAFE_CLOG2(4)-1:0] mem_cmd_dst_lo;
+  logic [`BSG_SAFE_CLOG2(4)-1:0] proc_cmd_dst_lo;
   bp_local_addr_s local_addr;
-  assign local_addr = mem_cmd_header_lo.addr;
+  assign local_addr = proc_cmd_header_lo.addr;
   wire [dev_id_width_gp-1:0] device_cmd_li = local_addr.dev;
-  wire local_cmd_li    = (mem_cmd_header_lo.addr < dram_base_addr_gp);
+  wire local_cmd_li    = (proc_cmd_header_lo.addr < dram_base_addr_gp);
 
   wire is_cfg_cmd      = local_cmd_li & (device_cmd_li == cfg_dev_gp);
   wire is_clint_cmd    = local_cmd_li & (device_cmd_li == clint_dev_gp);
@@ -721,61 +743,76 @@ module bp_tile
    #(.width_p(4), .lo_to_hi_p(1))
    cmd_pe
     (.i({is_loopback_cmd, is_clint_cmd, is_cfg_cmd, is_mem_cmd})
-     ,.addr_o(mem_cmd_dst_lo)
+     ,.addr_o(proc_cmd_dst_lo)
      ,.v_o()
      );
 
   // All CCE-Mem network responses go to the CCE on this tile (id = 0 in xbar)
   wire [3:0] dev_resp_dst_lo = '0;
 
-  bp_me_xbar_stream
+  localparam num_proc_lp = 1;
+  localparam num_dev_lp = 4;
+
+  bp_me_xbar_burst
    #(.bp_params_p(bp_params_p)
      ,.data_width_p(bedrock_data_width_p)
      ,.payload_width_p(mem_payload_width_lp)
-     ,.num_source_p(1)
-     ,.num_sink_p(4)
+     ,.num_source_p(num_proc_lp)
+     ,.num_sink_p(num_dev_lp)
      )
    cmd_xbar
     (.clk_i(clk_i)
-     ,.reset_i(reset_r)
+     ,.reset_i(reset_i)
 
-     ,.msg_header_i(mem_cmd_header_lo)
-     ,.msg_data_i(mem_cmd_data_lo)
-     ,.msg_v_i(mem_cmd_v_lo)
-     ,.msg_ready_and_o(mem_cmd_ready_and_li)
-     ,.msg_last_i(mem_cmd_last_lo)
-     ,.msg_dst_i(mem_cmd_dst_lo)
+     ,.msg_header_i(proc_cmd_header_lo)
+     ,.msg_header_v_i(proc_cmd_header_v_lo)
+     ,.msg_header_ready_and_o(proc_cmd_header_ready_and_li)
+     ,.msg_has_data_i(proc_cmd_has_data_lo)
+     ,.msg_data_i(proc_cmd_data_lo)
+     ,.msg_data_v_i(proc_cmd_data_v_lo)
+     ,.msg_data_ready_and_o(proc_cmd_data_ready_and_li)
+     ,.msg_last_i(proc_cmd_last_lo)
+     ,.msg_dst_i(proc_cmd_dst_lo)
 
      ,.msg_header_o(dev_cmd_header_li)
+     ,.msg_header_v_o(dev_cmd_header_v_li)
+     ,.msg_header_ready_and_i(dev_cmd_header_ready_and_lo)
+     ,.msg_has_data_o(dev_cmd_has_data_li)
      ,.msg_data_o(dev_cmd_data_li)
-     ,.msg_v_o(dev_cmd_v_li)
-     ,.msg_ready_and_i(dev_cmd_ready_and_lo)
+     ,.msg_data_v_o(dev_cmd_data_v_li)
+     ,.msg_data_ready_and_i(dev_cmd_data_ready_and_lo)
      ,.msg_last_o(dev_cmd_last_li)
      );
 
-  bp_me_xbar_stream
+  bp_me_xbar_burst
    #(.bp_params_p(bp_params_p)
      ,.data_width_p(bedrock_data_width_p)
      ,.payload_width_p(mem_payload_width_lp)
-     ,.num_source_p(4)
-     ,.num_sink_p(1)
+     ,.num_source_p(num_dev_lp)
+     ,.num_sink_p(num_proc_lp)
      )
    resp_xbar
     (.clk_i(clk_i)
-     ,.reset_i(reset_r)
+     ,.reset_i(reset_i)
 
      ,.msg_header_i(dev_resp_header_lo)
+     ,.msg_header_v_i(dev_resp_header_v_lo)
+     ,.msg_header_ready_and_o(dev_resp_header_ready_and_li)
+     ,.msg_has_data_i(dev_resp_has_data_lo)
      ,.msg_data_i(dev_resp_data_lo)
-     ,.msg_v_i(dev_resp_v_lo)
-     ,.msg_ready_and_o(dev_resp_ready_and_li)
+     ,.msg_data_v_i(dev_resp_data_v_lo)
+     ,.msg_data_ready_and_o(dev_resp_data_ready_and_li)
      ,.msg_last_i(dev_resp_last_lo)
      ,.msg_dst_i(dev_resp_dst_lo)
 
-     ,.msg_header_o(mem_resp_header_li)
-     ,.msg_data_o(mem_resp_data_li)
-     ,.msg_v_o(mem_resp_v_li)
-     ,.msg_ready_and_i(mem_resp_ready_and_lo)
-     ,.msg_last_o(mem_resp_last_li)
+     ,.msg_header_o(proc_resp_header_li)
+     ,.msg_header_v_o(proc_resp_header_v_li)
+     ,.msg_header_ready_and_i(proc_resp_header_ready_and_lo)
+     ,.msg_has_data_o(proc_resp_has_data_li)
+     ,.msg_data_o(proc_resp_data_li)
+     ,.msg_data_v_o(proc_resp_data_v_li)
+     ,.msg_data_ready_and_i(proc_resp_data_ready_and_lo)
+     ,.msg_last_o(proc_resp_last_li)
      );
 
   // CCE: Cache Coherence Engine
@@ -824,17 +861,23 @@ module bp_tile
 
      // CCE-MEM Interface
      // BedRock Burst protocol: ready&valid
-     ,.mem_resp_header_i(mem_resp_header_li)
-     ,.mem_resp_data_i(mem_resp_data_li)
-     ,.mem_resp_v_i(mem_resp_v_li)
-     ,.mem_resp_ready_and_o(mem_resp_ready_and_lo)
-     ,.mem_resp_last_i(mem_resp_last_li)
+     ,.mem_resp_header_i(proc_resp_header_li)
+     ,.mem_resp_header_v_i(proc_resp_header_v_li)
+     ,.mem_resp_header_ready_and_o(proc_resp_header_ready_and_lo)
+     ,.mem_resp_has_data_i(proc_resp_has_data_li)
+     ,.mem_resp_data_i(proc_resp_data_li)
+     ,.mem_resp_data_v_i(proc_resp_data_v_li)
+     ,.mem_resp_data_ready_and_o(proc_resp_data_ready_and_lo)
+     ,.mem_resp_last_i(proc_resp_last_li)
 
-     ,.mem_cmd_header_o(mem_cmd_header_lo)
-     ,.mem_cmd_data_o(mem_cmd_data_lo)
-     ,.mem_cmd_v_o(mem_cmd_v_lo)
-     ,.mem_cmd_ready_and_i(mem_cmd_ready_and_li)
-     ,.mem_cmd_last_o(mem_cmd_last_lo)
+     ,.mem_cmd_header_o(proc_cmd_header_lo)
+     ,.mem_cmd_header_v_o(proc_cmd_header_v_lo)
+     ,.mem_cmd_header_ready_and_i(proc_cmd_header_ready_and_li)
+     ,.mem_cmd_has_data_o(proc_cmd_has_data_lo)
+     ,.mem_cmd_data_o(proc_cmd_data_lo)
+     ,.mem_cmd_data_v_o(proc_cmd_data_v_lo)
+     ,.mem_cmd_data_ready_and_i(proc_cmd_data_ready_and_li)
+     ,.mem_cmd_last_o(proc_cmd_last_lo)
      );
 
   // CCE-Mem network to L2 Cache adapter
@@ -852,15 +895,21 @@ module bp_tile
      ,.reset_i(reset_r)
 
      ,.mem_cmd_header_i(dev_cmd_header_li[0])
+     ,.mem_cmd_header_v_i(dev_cmd_header_v_li[0])
+     ,.mem_cmd_header_ready_and_o(dev_cmd_header_ready_and_lo[0])
+     ,.mem_cmd_has_data_i(dev_cmd_has_data_li[0])
      ,.mem_cmd_data_i(dev_cmd_data_li[0])
-     ,.mem_cmd_v_i(dev_cmd_v_li[0])
-     ,.mem_cmd_ready_and_o(dev_cmd_ready_and_lo[0])
+     ,.mem_cmd_data_v_i(dev_cmd_data_v_li[0])
+     ,.mem_cmd_data_ready_and_o(dev_cmd_data_ready_and_lo[0])
      ,.mem_cmd_last_i(dev_cmd_last_li[0])
 
      ,.mem_resp_header_o(dev_resp_header_lo[0])
+     ,.mem_resp_header_v_o(dev_resp_header_v_lo[0])
+     ,.mem_resp_header_ready_and_i(dev_resp_header_ready_and_li[0])
+     ,.mem_resp_has_data_o(dev_resp_has_data_lo[0])
      ,.mem_resp_data_o(dev_resp_data_lo[0])
-     ,.mem_resp_v_o(dev_resp_v_lo[0])
-     ,.mem_resp_ready_and_i(dev_resp_ready_and_li[0])
+     ,.mem_resp_data_v_o(dev_resp_data_v_lo[0])
+     ,.mem_resp_data_ready_and_i(dev_resp_data_ready_and_li[0])
      ,.mem_resp_last_o(dev_resp_last_lo[0])
 
      ,.dma_pkt_o(dma_pkt_lo)

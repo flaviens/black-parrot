@@ -40,12 +40,14 @@ int main(int argc, char **argv) {
 
   Verilated::assertOn(true);
 
+  int i = 0;
   while (!Verilated::gotFinish()) {
     bsg_timekeeper::next();
     tb->eval();
     #if VM_TRACE_FST
       wf->dump(sc_time_stamp());
     #endif
+    i++;
   }
   std::cout << "Finishing test" << std::endl;
 

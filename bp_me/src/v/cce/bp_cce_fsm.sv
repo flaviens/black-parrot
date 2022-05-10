@@ -88,15 +88,21 @@ module bp_cce_fsm
    // CCE-MEM Interface
    // BedRock Stream protocol: ready&valid
    , input [mem_header_width_lp-1:0]                mem_resp_header_i
+   , input                                          mem_resp_header_v_i
+   , output logic                                   mem_resp_header_ready_and_o
+   , input                                          mem_resp_has_data_i
    , input [bedrock_data_width_p-1:0]               mem_resp_data_i
-   , input                                          mem_resp_v_i
-   , output logic                                   mem_resp_ready_and_o
+   , input                                          mem_resp_data_v_i
+   , output logic                                   mem_resp_data_ready_and_o
    , input                                          mem_resp_last_i
 
    , output logic [mem_header_width_lp-1:0]         mem_cmd_header_o
+   , output logic                                   mem_cmd_header_v_o
+   , input                                          mem_cmd_header_ready_and_i
+   , output logic                                   mem_cmd_has_data_o
    , output logic [bedrock_data_width_p-1:0]        mem_cmd_data_o
-   , output logic                                   mem_cmd_v_o
-   , input                                          mem_cmd_ready_and_i
+   , output logic                                   mem_cmd_data_v_o
+   , input                                          mem_cmd_data_ready_and_i
    , output logic                                   mem_cmd_last_o
    );
 
@@ -148,7 +154,7 @@ module bp_cce_fsm
   // Memory Response Stream Pump
   bp_bedrock_mem_header_s mem_resp_base_header_li;
   logic mem_resp_v_li, mem_resp_yumi_lo;
-  logic mem_resp_stream_new_li, mem_resp_stream_last_li, mem_resp_stream_done_li;
+  logic mem_resp_stream_new_li, mem_resp_stream_last_li;
   logic [paddr_width_p-1:0] mem_resp_addr_li;
   logic [bedrock_data_width_p-1:0] mem_resp_data_li;
   bp_me_stream_pump_in
@@ -166,10 +172,13 @@ module bp_cce_fsm
       ,.reset_i(reset_i)
       // from memory response input
       ,.msg_header_i(mem_resp_header_i)
+      ,.msg_header_v_i(mem_resp_header_v_i)
+      ,.msg_header_ready_and_o(mem_resp_header_ready_and_o)
+      ,.msg_has_data_i(mem_resp_has_data_i)
       ,.msg_data_i(mem_resp_data_i)
-      ,.msg_v_i(mem_resp_v_i)
+      ,.msg_data_v_i(mem_resp_data_v_i)
+      ,.msg_data_ready_and_o(mem_resp_data_ready_and_o)
       ,.msg_last_i(mem_resp_last_i)
-      ,.msg_ready_and_o(mem_resp_ready_and_o)
       // to FSM CCE
       ,.fsm_base_header_o(mem_resp_base_header_li)
       ,.fsm_addr_o(mem_resp_addr_li)
@@ -178,7 +187,6 @@ module bp_cce_fsm
       ,.fsm_ready_and_i(mem_resp_yumi_lo)
       ,.fsm_new_o(mem_resp_stream_new_li)
       ,.fsm_last_o(mem_resp_stream_last_li)
-      ,.fsm_done_o(mem_resp_stream_done_li)
       );
 
   // Memory Command Stream Pump
@@ -186,7 +194,7 @@ module bp_cce_fsm
   localparam data_len_width_lp = `BSG_SAFE_CLOG2(stream_words_lp);
   bp_bedrock_mem_header_s mem_cmd_base_header_lo;
   logic mem_cmd_v_lo, mem_cmd_ready_and_li;
-  logic mem_cmd_stream_new_li, mem_cmd_stream_done_li;
+  logic mem_cmd_stream_new_li, mem_cmd_stream_last_li;
   logic [bedrock_data_width_p-1:0] mem_cmd_data_lo;
   logic [data_len_width_lp-1:0] mem_cmd_stream_cnt_li;
   bp_me_stream_pump_out
@@ -202,10 +210,13 @@ module bp_cce_fsm
       ,.reset_i(reset_i)
       // to memory command output
       ,.msg_header_o(mem_cmd_header_o)
+      ,.msg_header_v_o(mem_cmd_header_v_o)
+      ,.msg_header_ready_and_i(mem_cmd_header_ready_and_i)
+      ,.msg_has_data_o(mem_cmd_has_data_o)
       ,.msg_data_o(mem_cmd_data_o)
-      ,.msg_v_o(mem_cmd_v_o)
+      ,.msg_data_v_o(mem_cmd_data_v_o)
+      ,.msg_data_ready_and_i(mem_cmd_data_ready_and_i)
       ,.msg_last_o(mem_cmd_last_o)
-      ,.msg_ready_and_i(mem_cmd_ready_and_i)
       // from FSM CCE
       ,.fsm_base_header_i(mem_cmd_base_header_lo)
       ,.fsm_data_i(mem_cmd_data_lo)
@@ -213,8 +224,7 @@ module bp_cce_fsm
       ,.fsm_ready_and_o(mem_cmd_ready_and_li)
       ,.fsm_cnt_o(mem_cmd_stream_cnt_li)
       ,.fsm_new_o(mem_cmd_stream_new_li)
-      ,.fsm_last_o(/* unused */)
-      ,.fsm_done_o(mem_cmd_stream_done_li)
+      ,.fsm_last_o(mem_cmd_stream_last_li)
       );
 
   // Config bus
@@ -514,18 +524,15 @@ module bp_cce_fsm
   // memory command/response counter
   logic [`BSG_WIDTH(mem_noc_max_credits_p)-1:0] mem_credit_count_lo;
   bsg_flow_counter
-    #(.els_p(mem_noc_max_credits_p)
-      // memory command increments on done singal from stream pump
-      ,.ready_THEN_valid_p(1)
-      )
+    #(.els_p(mem_noc_max_credits_p))
     mem_credit_counter
      (.clk_i(clk_i)
       ,.reset_i(reset_i)
       // memory commands consume credits
-      ,.v_i(mem_cmd_stream_done_li)
-      ,.ready_i(1'b0) // unused due to ready_then_valid param
+      ,.v_i(mem_cmd_v_lo & mem_cmd_stream_last_li)
+      ,.ready_i(mem_cmd_ready_and_li)
       // memory responses return credits
-      ,.yumi_i(mem_resp_stream_done_li)
+      ,.yumi_i(mem_resp_yumi_lo & mem_resp_stream_last_li)
       ,.count_o(mem_credit_count_lo)
       );
 
@@ -947,7 +954,7 @@ module bp_cce_fsm
         lce_cmd_last_o = mem_resp_stream_last_li;
         // consume beat when data sends on LCE command
         mem_resp_yumi_lo = mem_resp_v_li & lce_cmd_data_ready_and_i;
-        mem_resp_state_n = (mem_resp_stream_done_li)
+        mem_resp_state_n = (mem_resp_yumi_lo & mem_resp_stream_last_li)
                            ? e_mem_resp_ready
                            : e_mem_resp_send_data;
 
@@ -955,7 +962,7 @@ module bp_cce_fsm
       e_mem_resp_drain_data: begin
         // when a speculative read is squashed, its data must be drained
         mem_resp_yumi_lo = mem_resp_v_li;
-        mem_resp_state_n = (mem_resp_stream_done_li)
+        mem_resp_state_n = (mem_resp_yumi_lo & mem_resp_stream_last_li)
                            ? e_mem_resp_ready
                            : e_mem_resp_drain_data;
 
@@ -1062,7 +1069,7 @@ module bp_cce_fsm
           mem_cmd_v_lo = lce_req_data_v_i & ~mem_credits_empty;
           lce_req_data_ready_and_o = mem_cmd_ready_and_li & ~mem_credits_empty;
           // LCE request header is only dequeued if stream pump indicates stream is done
-          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
           mem_cmd_base_header_lo.addr = lce_req_header_cast_li.addr;
           mem_cmd_base_header_lo.size = lce_req_header_cast_li.size;
@@ -1071,7 +1078,7 @@ module bp_cce_fsm
           mem_cmd_base_header_lo.payload.uncached = 1'b1;
           mem_cmd_data_lo = lce_req_data_i;
 
-          state_n = (mem_cmd_v_lo & mem_cmd_ready_and_li) & ~mem_cmd_stream_done_li
+          state_n = (mem_cmd_v_lo & mem_cmd_ready_and_li) & ~mem_cmd_stream_last_li
                     ? e_uncached_only_data : e_uncached_only;
 
         end // uncached store
@@ -1080,7 +1087,7 @@ module bp_cce_fsm
         else if (lce_req_v & (lce_req_header_cast_li.msg_type.req == e_bedrock_req_uc_rd)) begin
           // uncached load has no data
           mem_cmd_v_lo = lce_req_v & ~mem_credits_empty;
-          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
           mem_cmd_base_header_lo.addr = lce_req_header_cast_li.addr;
           mem_cmd_base_header_lo.size = lce_req_header_cast_li.size;
@@ -1100,7 +1107,7 @@ module bp_cce_fsm
           mem_cmd_v_lo = lce_req_v & lce_req_data_v_i & ~mem_credits_empty;
           lce_req_data_ready_and_o = mem_cmd_ready_and_li & ~mem_credits_empty;
           // LCE request header is only dequeued if stream pump indicates stream is done
-          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
           // form message
           mem_cmd_base_header_lo.addr = lce_req_header_cast_li.addr;
@@ -1110,7 +1117,7 @@ module bp_cce_fsm
           mem_cmd_base_header_lo.payload.uncached = 1'b1;
           mem_cmd_data_lo = lce_req_data_i;
 
-          state_n = mem_cmd_stream_done_li
+          state_n = lce_req_yumi
                     ? e_uncached_only
                     : e_uncached_only_data;
         end
@@ -1223,7 +1230,7 @@ module bp_cce_fsm
           mem_cmd_v_lo = lce_req_v & lce_req_data_v_i & ~mem_credits_empty;
           lce_req_data_ready_and_o = lce_req_v & mem_cmd_ready_and_li & ~mem_credits_empty;
           // LCE request header is only dequeued if stream pump indicates stream is done
-          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
           // form message
           mem_cmd_base_header_lo.addr = mshr_r.paddr;
@@ -1236,7 +1243,7 @@ module bp_cce_fsm
           // if mem command is acked, check if stream is done or not to determine if need to
           // send additional data. If command is not acked, try again next cycle.
           state_n = (mem_cmd_v_lo & mem_cmd_ready_and_li)
-                    ? mem_cmd_stream_done_li
+                    ? mem_cmd_stream_last_li
                       ? e_ready
                       : e_uncached_data
                     : e_uncached_req;
@@ -1247,7 +1254,7 @@ module bp_cce_fsm
         else begin
           // uncached load has no data
           mem_cmd_v_lo = lce_req_v & ~mem_credits_empty;
-          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
           mem_cmd_base_header_lo.addr = mshr_r.paddr;
           mem_cmd_base_header_lo.size = mshr_r.msg_size;
@@ -1267,7 +1274,7 @@ module bp_cce_fsm
          mem_cmd_v_lo = lce_req_v & lce_req_data_v_i & ~mem_credits_empty;
          lce_req_data_ready_and_o = lce_req_v & mem_cmd_ready_and_li & ~mem_credits_empty;
          // LCE request header is only dequeued if stream pump indicates stream is done
-         lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_done_li;
+         lce_req_yumi = mem_cmd_v_lo & mem_cmd_ready_and_li & mem_cmd_stream_last_li;
 
          // form message
          mem_cmd_base_header_lo.addr = mshr_r.paddr;
@@ -1278,7 +1285,7 @@ module bp_cce_fsm
          mem_cmd_data_lo = lce_req_data_i;
 
          // stream pump done signal indicates if all data has sent
-         state_n = mem_cmd_stream_done_li
+         state_n = lce_req_yumi
                    ? e_ready
                    : e_uncached_data;
 
@@ -1552,7 +1559,7 @@ module bp_cce_fsm
             mem_cmd_v_lo = lce_resp_data_v_i;
             lce_resp_data_ready_and_o = mem_cmd_ready_and_li;
             // only dequeue LCE response header when stream pump finishes
-            lce_resp_yumi = mem_cmd_stream_done_li;
+            lce_resp_yumi = mem_cmd_ready_and_li & mem_cmd_v_lo & mem_cmd_stream_last_li;
 
             mem_cmd_base_header_lo.msg_type = e_bedrock_mem_wr;
             mem_cmd_base_header_lo.addr = lce_resp_header_cast_li.addr;
@@ -1562,7 +1569,7 @@ module bp_cce_fsm
             mem_cmd_data_lo = lce_resp_data_i;
 
             // send remaining beats
-            state_n = (mem_cmd_stream_done_li)
+            state_n = lce_resp_yumi
                       ? (invalidate_flag)
                         ? e_inv_cmd
                         : (transfer_flag)
@@ -1571,7 +1578,7 @@ module bp_cce_fsm
                       : e_replacement_wb_resp;
 
             // set the pending bit on last beat
-            pending_w_v = mem_cmd_stream_done_li;
+            pending_w_v = lce_resp_yumi;
             pending_li = 1'b1;
             pending_w_addr = lce_resp_header_cast_li.addr;
 
@@ -1579,7 +1586,7 @@ module bp_cce_fsm
             mshr_n.flags.replacement = 1'b0;
 
             // setup required state for sending invalidations
-            if (mem_cmd_stream_done_li & invalidate_flag) begin
+            if (lce_resp_yumi & invalidate_flag) begin
               // don't invalidate the requesting LCE
               pe_sharers_n = sharers_hits_r & ~req_lce_id_one_hot;
               // if doing a transfer, also remove owner LCE since transfer
@@ -1724,7 +1731,7 @@ module bp_cce_fsm
               // r&v on lce resp data
               mem_cmd_v_lo = lce_resp_v & lce_resp_data_v_i;
               lce_resp_data_ready_and_o = mem_cmd_ready_and_li;
-              lce_resp_yumi = mem_cmd_stream_done_li;
+              lce_resp_yumi = mem_cmd_ready_and_li & mem_cmd_v_lo & mem_cmd_stream_last_li;
 
               mem_cmd_base_header_lo.msg_type.mem = e_bedrock_mem_wr;
               mem_cmd_base_header_lo.addr = lce_resp_header_cast_li.addr;
@@ -1733,11 +1740,11 @@ module bp_cce_fsm
               mem_cmd_data_lo = lce_resp_data_i;
 
               // set the pending bit
-              pending_w_v = mem_cmd_stream_done_li;
+              pending_w_v = lce_resp_yumi;
               pending_li = 1'b1;
               pending_w_addr = lce_resp_header_cast_li.addr;
 
-              state_n = (mem_cmd_stream_done_li)
+              state_n = lce_resp_yumi
                         ? e_uc_coherent_mem_cmd
                         : e_uc_coherent_resp;
 
@@ -1761,7 +1768,7 @@ module bp_cce_fsm
           // v->y on lce req header
           // r&v on lce req data
           mem_cmd_v_lo = lce_req_v;
-          lce_req_yumi = mem_cmd_stream_done_li;
+          lce_req_yumi = mem_cmd_ready_and_li & mem_cmd_v_lo & mem_cmd_stream_last_li;
           lce_req_data_ready_and_o = mem_cmd_ready_and_li;
 
           // set message type based on request message type
@@ -1784,11 +1791,11 @@ module bp_cce_fsm
           mem_cmd_data_lo = lce_req_data_i;
 
           // set the pending bit
-          pending_w_v = mem_cmd_stream_done_li;
+          pending_w_v = lce_req_yumi;
           pending_li = 1'b1;
           pending_w_addr = mshr_r.paddr;
 
-          state_n = mem_cmd_stream_done_li
+          state_n = lce_req_yumi
                     ? e_ready
                     : e_uc_coherent_mem_cmd;
 
@@ -1880,7 +1887,7 @@ module bp_cce_fsm
             // lce resp data is r&v
             mem_cmd_v_lo = lce_resp_v & lce_resp_data_v_i;
             lce_resp_data_ready_and_o = mem_cmd_ready_and_li;
-            lce_resp_yumi = mem_cmd_stream_done_li;
+            lce_resp_yumi = mem_cmd_ready_and_li & mem_cmd_v_lo & mem_cmd_stream_last_li;
 
             mem_cmd_base_header_lo.msg_type.mem = e_bedrock_mem_wr;
             mem_cmd_base_header_lo.addr = lce_resp_header_cast_li.addr;
@@ -1889,10 +1896,10 @@ module bp_cce_fsm
             mem_cmd_base_header_lo.size = lce_resp_header_cast_li.size;
             mem_cmd_data_lo = lce_resp_data_i;
 
-            state_n = (mem_cmd_stream_done_li) ? e_resolve_speculation : e_transfer_wb_resp;
+            state_n = lce_resp_yumi ? e_resolve_speculation : e_transfer_wb_resp;
 
             // set the pending bit
-            pending_w_v = mem_cmd_stream_done_li;
+            pending_w_v = lce_resp_yumi;
             pending_li = 1'b1;
             pending_w_addr = lce_resp_header_cast_li.addr;
 

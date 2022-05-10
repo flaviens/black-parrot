@@ -81,7 +81,7 @@ class NBF:
 
   # constructor
   def __init__(self, ncpus, ucode_file, mem_file, checkpoint_file, config, skip_zeros, addr_width,
-          data_width, boot_pc, debug, verify):
+          data_width, boot_pc, debug):
 
     # input parameters
     self.ncpus = ncpus
@@ -94,7 +94,6 @@ class NBF:
     self.data_width = data_width
     self.boot_pc = boot_pc
     self.debug = debug
-    self.verify = verify
 
     # Grab various files
     if self.mem_file:
@@ -250,12 +249,6 @@ class NBF:
       self.print_nbf_allcores(3, cfg_base_addr + cfg_reg_icache_mode, 1)
       self.print_nbf_allcores(3, cfg_base_addr + cfg_reg_dcache_mode, 1)
 
-      if self.verify:
-        # Read back I$, D$ and CCE modes for verification
-        self.print_nbf(0x12, cfg_base_addr + cfg_reg_icache_mode, 1)
-        self.print_nbf(0x12, cfg_base_addr + cfg_reg_dcache_mode, 1)
-        self.print_nbf(0x12, cfg_base_addr + cfg_reg_cce_mode, 1)
-
     # Write RTC
     self.print_nbf_allcores(3, clint_base_addr + clint_reg_mtimesel, 1)
 
@@ -296,10 +289,9 @@ if __name__ == "__main__":
   parser.add_argument('--data_width', type=int, default=64, help='Data width')
   parser.add_argument('--boot_pc', dest='boot_pc', help='The first PC to be fetched')
   parser.add_argument('--debug', dest='debug', action='store_true', help='Whether to start in debug mode')
-  parser.add_argument("--verify", dest='verify', action='store_true', help='Read back mode registers')
 
   args = parser.parse_args()
 
   converter = NBF(args.ncpus, args.ucode_file, args.mem_file, args.checkpoint_file, args.config,
-          args.skip_zeros, args.addr_width, args.data_width, args.boot_pc, args.debug, args.verify)
+          args.skip_zeros, args.addr_width, args.data_width, args.boot_pc, args.debug)
   converter.dump()

@@ -32,28 +32,40 @@ module wrapper
 
    // Outgoing I/O
    , output logic [mem_header_width_lp-1:0]                 io_cmd_header_o
+   , output logic                                           io_cmd_header_v_o
+   , input                                                  io_cmd_header_ready_and_i
+   , output logic                                           io_cmd_has_data_o
    , output logic [io_data_width_p-1:0]                     io_cmd_data_o
-   , output logic                                           io_cmd_v_o
-   , input                                                  io_cmd_ready_and_i
+   , output logic                                           io_cmd_data_v_o
+   , input                                                  io_cmd_data_ready_and_i
    , output logic                                           io_cmd_last_o
 
    , input [mem_header_width_lp-1:0]                        io_resp_header_i
+   , input                                                  io_resp_header_v_i
+   , output logic                                           io_resp_header_ready_and_o
+   , input                                                  io_resp_has_data_i
    , input [io_data_width_p-1:0]                            io_resp_data_i
-   , input                                                  io_resp_v_i
-   , output logic                                           io_resp_ready_and_o
+   , input                                                  io_resp_data_v_i
+   , output logic                                           io_resp_data_ready_and_o
    , input                                                  io_resp_last_i
 
    // Incoming I/O
    , input [mem_header_width_lp-1:0]                        io_cmd_header_i
+   , input                                                  io_cmd_header_v_i
+   , output logic                                           io_cmd_header_ready_and_o
+   , input                                                  io_cmd_has_data_i
    , input [io_data_width_p-1:0]                            io_cmd_data_i
-   , input                                                  io_cmd_v_i
-   , output logic                                           io_cmd_ready_and_o
+   , input                                                  io_cmd_data_v_i
+   , output logic                                           io_cmd_data_ready_and_o
    , input                                                  io_cmd_last_i
 
    , output logic [mem_header_width_lp-1:0]                 io_resp_header_o
+   , output logic                                           io_resp_header_v_o
+   , input                                                  io_resp_header_ready_and_i
+   , output logic                                           io_resp_has_data_o
    , output logic [io_data_width_p-1:0]                     io_resp_data_o
-   , output logic                                           io_resp_v_o
-   , input                                                  io_resp_ready_and_i
+   , output logic                                           io_resp_data_v_o
+   , input                                                  io_resp_data_ready_and_i
    , output logic                                           io_resp_last_o
 
    // DRAM interface
@@ -116,13 +128,7 @@ module wrapper
 
       wire [io_noc_cord_width_p-1:0] dst_cord_lo = 1;
 
-      `declare_bp_bedrock_mem_if(paddr_width_p, did_width_p, lce_id_width_p, lce_assoc_p);
       `declare_bsg_ready_and_link_sif_s(io_noc_flit_width_p, bsg_ready_and_link_sif_s);
-      `bp_cast_i(bp_bedrock_mem_header_s, io_cmd_header);
-      `bp_cast_o(bp_bedrock_mem_header_s, io_resp_header);
-      `bp_cast_o(bp_bedrock_mem_header_s, io_cmd_header);
-      `bp_cast_i(bp_bedrock_mem_header_s, io_resp_header);
-
       bsg_ready_and_link_sif_s send_cmd_link_lo, send_resp_link_li;
       bsg_ready_and_link_sif_s recv_cmd_link_li, recv_resp_link_lo;
       assign recv_cmd_link_li   = '{data          : proc_cmd_link_lo.data
@@ -143,69 +149,11 @@ module wrapper
                                     ,ready_and_rev: send_cmd_link_lo.ready_and_rev
                                     };
 
-
-      bp_bedrock_mem_header_s io_cmd_header_li;
-      logic [io_data_width_p-1:0] io_cmd_data_li;
-      logic io_cmd_header_v_li, io_cmd_has_data_li, io_cmd_header_ready_and_lo;
-      logic io_cmd_data_v_li, io_cmd_last_li, io_cmd_data_ready_and_lo;
-
-      bp_bedrock_mem_header_s io_resp_header_lo;
-      logic [io_data_width_p-1:0] io_resp_data_lo;
-      logic io_resp_header_v_lo, io_resp_has_data_lo, io_resp_header_ready_and_li;
-      logic io_resp_data_v_lo, io_resp_last_lo, io_resp_data_ready_and_li;
-
-      bp_me_stream_to_burst
-       #(.bp_params_p(bp_params_p)
-         ,.data_width_p(io_data_width_p)
-         ,.payload_width_p(mem_payload_width_lp)
-         ,.payload_mask_p(mem_cmd_payload_mask_gp)
-         )
-       io_cmd_s2b
-        (.clk_i(clk_i)
-         ,.reset_i(reset_i)
-
-         ,.in_msg_header_i(io_cmd_header_cast_i)
-         ,.in_msg_data_i(io_cmd_data_i)
-         ,.in_msg_v_i(io_cmd_v_i)
-         ,.in_msg_ready_and_o(io_cmd_ready_and_o)
-         ,.in_msg_last_i(io_cmd_last_i)
-
-         ,.out_msg_header_o(io_cmd_header_li)
-         ,.out_msg_header_v_o(io_cmd_header_v_li)
-         ,.out_msg_header_ready_and_i(io_cmd_header_ready_and_lo)
-         ,.out_msg_has_data_o(io_cmd_has_data_li)
-         ,.out_msg_data_o(io_cmd_data_li)
-         ,.out_msg_data_v_o(io_cmd_data_v_li)
-         ,.out_msg_data_ready_and_i(io_cmd_data_ready_and_lo)
-         ,.out_msg_last_o(io_cmd_last_li)
-         );
-
-      bp_me_burst_to_stream
-       #(.bp_params_p(bp_params_p)
-         ,.data_width_p(io_data_width_p)
-         ,.payload_width_p(mem_payload_width_lp)
-         ,.block_width_p(cce_block_width_p)
-         ,.payload_mask_p(mem_resp_payload_mask_gp)
-         )
-       io_resp_b2s
-        (.clk_i(clk_i)
-         ,.reset_i(reset_i)
-
-         ,.in_msg_header_i(io_resp_header_lo)
-         ,.in_msg_header_v_i(io_resp_header_v_lo)
-         ,.in_msg_header_ready_and_o(io_resp_header_ready_and_li)
-         ,.in_msg_has_data_i(io_resp_has_data_lo)
-         ,.in_msg_data_i(io_resp_data_lo)
-         ,.in_msg_data_v_i(io_resp_data_v_lo)
-         ,.in_msg_data_ready_and_o(io_resp_data_ready_and_li)
-         ,.in_msg_last_i(io_resp_last_lo)
-
-         ,.out_msg_header_o(io_resp_header_cast_o)
-         ,.out_msg_data_o(io_resp_data_o)
-         ,.out_msg_v_o(io_resp_v_o)
-         ,.out_msg_ready_and_i(io_resp_ready_and_i)
-         ,.out_msg_last_o(io_resp_last_o)
-         );
+      `declare_bp_bedrock_mem_if(paddr_width_p, did_width_p, lce_id_width_p, lce_assoc_p);
+      `bp_cast_i(bp_bedrock_mem_header_s, io_cmd_header);
+      `bp_cast_o(bp_bedrock_mem_header_s, io_resp_header);
+      `bp_cast_o(bp_bedrock_mem_header_s, io_cmd_header);
+      `bp_cast_i(bp_bedrock_mem_header_s, io_resp_header);
 
       bp_me_bedrock_mem_to_link
        #(.bp_params_p(bp_params_p)
@@ -222,89 +170,26 @@ module wrapper
          ,.dst_cord_i(dst_cord_lo)
          ,.dst_cid_i('0)
 
-         ,.mem_header_i(io_cmd_header_li)
-         ,.mem_header_v_i(io_cmd_header_v_li)
-         ,.mem_header_ready_and_o(io_cmd_header_ready_and_lo)
-         ,.mem_has_data_i(io_cmd_has_data_li)
-         ,.mem_data_i(io_cmd_data_li)
-         ,.mem_data_v_i(io_cmd_data_v_li)
-         ,.mem_data_ready_and_o(io_cmd_data_ready_and_lo)
-         ,.mem_last_i(io_cmd_last_li)
+         ,.mem_header_i(io_cmd_header_cast_i)
+         ,.mem_header_v_i(io_cmd_header_v_i)
+         ,.mem_header_ready_and_o(io_cmd_header_ready_and_o)
+         ,.mem_has_data_i(io_cmd_has_data_i)
+         ,.mem_data_i(io_cmd_data_i)
+         ,.mem_data_v_i(io_cmd_data_v_i)
+         ,.mem_data_ready_and_o(io_cmd_data_ready_and_o)
+         ,.mem_last_i(io_cmd_last_i)
 
-         ,.mem_header_o(io_resp_header_lo)
-         ,.mem_header_v_o(io_resp_header_v_lo)
-         ,.mem_header_ready_and_i(io_resp_header_ready_and_li)
-         ,.mem_has_data_o(io_resp_has_data_lo)
-         ,.mem_data_o(io_resp_data_lo)
-         ,.mem_data_v_o(io_resp_data_v_lo)
-         ,.mem_data_ready_and_i(io_resp_data_ready_and_li)
-         ,.mem_last_o(io_resp_last_lo)
+         ,.mem_header_o(io_resp_header_cast_o)
+         ,.mem_header_v_o(io_resp_header_v_o)
+         ,.mem_header_ready_and_i(io_resp_header_ready_and_i)
+         ,.mem_has_data_o(io_resp_has_data_o)
+         ,.mem_data_o(io_resp_data_o)
+         ,.mem_data_v_o(io_resp_data_v_o)
+         ,.mem_data_ready_and_i(io_resp_data_ready_and_i)
+         ,.mem_last_o(io_resp_last_o)
 
          ,.link_o(send_cmd_link_lo)
          ,.link_i(send_resp_link_li)
-         );
-
-      bp_bedrock_mem_header_s io_cmd_header_lo;
-      logic [io_data_width_p-1:0] io_cmd_data_lo;
-      logic io_cmd_header_v_lo, io_cmd_has_data_lo, io_cmd_header_ready_and_li;
-      logic io_cmd_data_v_lo, io_cmd_last_lo, io_cmd_data_ready_and_li;
-
-      bp_bedrock_mem_header_s io_resp_header_li;
-      logic [io_data_width_p-1:0] io_resp_data_li;
-      logic io_resp_header_v_li, io_resp_has_data_li, io_resp_header_ready_and_lo;
-      logic io_resp_data_v_li, io_resp_last_li, io_resp_data_ready_and_lo;
-
-      bp_me_stream_to_burst
-       #(.bp_params_p(bp_params_p)
-         ,.data_width_p(io_data_width_p)
-         ,.payload_width_p(mem_payload_width_lp)
-         ,.payload_mask_p(mem_resp_payload_mask_gp)
-         )
-       io_resp_s2b
-        (.clk_i(clk_i)
-         ,.reset_i(reset_i)
-
-         ,.in_msg_header_i(io_resp_header_cast_i)
-         ,.in_msg_data_i(io_resp_data_i)
-         ,.in_msg_v_i(io_resp_v_i)
-         ,.in_msg_ready_and_o(io_resp_ready_and_o)
-         ,.in_msg_last_i(io_resp_last_i)
-
-         ,.out_msg_header_o(io_resp_header_li)
-         ,.out_msg_header_v_o(io_resp_header_v_li)
-         ,.out_msg_header_ready_and_i(io_resp_header_ready_and_lo)
-         ,.out_msg_has_data_o(io_resp_has_data_li)
-         ,.out_msg_data_o(io_resp_data_li)
-         ,.out_msg_data_v_o(io_resp_data_v_li)
-         ,.out_msg_data_ready_and_i(io_resp_data_ready_and_lo)
-         ,.out_msg_last_o(io_resp_last_li)
-         );
-
-      bp_me_burst_to_stream
-       #(.bp_params_p(bp_params_p)
-         ,.data_width_p(io_data_width_p)
-         ,.payload_width_p(mem_payload_width_lp)
-         ,.block_width_p(cce_block_width_p)
-         ,.payload_mask_p(mem_cmd_payload_mask_gp)
-         )
-       io_cmd_b2s
-        (.clk_i(clk_i)
-         ,.reset_i(reset_i)
-
-         ,.in_msg_header_i(io_cmd_header_lo)
-         ,.in_msg_header_v_i(io_cmd_header_v_lo)
-         ,.in_msg_header_ready_and_o(io_cmd_header_ready_and_li)
-         ,.in_msg_has_data_i(io_cmd_has_data_lo)
-         ,.in_msg_data_i(io_cmd_data_lo)
-         ,.in_msg_data_v_i(io_cmd_data_v_lo)
-         ,.in_msg_data_ready_and_o(io_cmd_data_ready_and_li)
-         ,.in_msg_last_i(io_cmd_last_lo)
-
-         ,.out_msg_header_o(io_cmd_header_cast_o)
-         ,.out_msg_data_o(io_cmd_data_o)
-         ,.out_msg_v_o(io_cmd_v_o)
-         ,.out_msg_ready_and_i(io_cmd_ready_and_i)
-         ,.out_msg_last_o(io_cmd_last_o)
          );
 
       bp_me_bedrock_mem_to_link
@@ -322,23 +207,23 @@ module wrapper
          ,.dst_cord_i(io_resp_header_cast_i.payload.did)
          ,.dst_cid_i('0)
 
-         ,.mem_header_o(io_cmd_header_lo)
-         ,.mem_header_v_o(io_cmd_header_v_lo)
-         ,.mem_header_ready_and_i(io_cmd_header_ready_and_li)
-         ,.mem_has_data_o(io_cmd_has_data_lo)
-         ,.mem_data_o(io_cmd_data_lo)
-         ,.mem_data_v_o(io_cmd_data_v_lo)
-         ,.mem_data_ready_and_i(io_cmd_data_ready_and_li)
-         ,.mem_last_o(io_cmd_last_lo)
+         ,.mem_header_o(io_cmd_header_cast_o)
+         ,.mem_header_v_o(io_cmd_header_v_o)
+         ,.mem_header_ready_and_i(io_cmd_header_ready_and_i)
+         ,.mem_has_data_o(io_cmd_has_data_o)
+         ,.mem_data_o(io_cmd_data_o)
+         ,.mem_data_v_o(io_cmd_data_v_o)
+         ,.mem_data_ready_and_i(io_cmd_data_ready_and_i)
+         ,.mem_last_o(io_cmd_last_o)
 
-         ,.mem_header_i(io_resp_header_li)
-         ,.mem_header_v_i(io_resp_header_v_li)
-         ,.mem_header_ready_and_o(io_resp_header_ready_and_lo)
-         ,.mem_has_data_i(io_resp_has_data_li)
-         ,.mem_data_i(io_resp_data_li)
-         ,.mem_data_v_i(io_resp_data_v_li)
-         ,.mem_data_ready_and_o(io_resp_data_ready_and_lo)
-         ,.mem_last_i(io_resp_last_li)
+         ,.mem_header_i(io_resp_header_cast_i)
+         ,.mem_header_v_i(io_resp_header_v_i)
+         ,.mem_header_ready_and_o(io_resp_header_ready_and_o)
+         ,.mem_has_data_i(io_resp_has_data_i)
+         ,.mem_data_i(io_resp_data_i)
+         ,.mem_data_v_i(io_resp_data_v_i)
+         ,.mem_data_ready_and_o(io_resp_data_ready_and_o)
+         ,.mem_last_i(io_resp_last_i)
 
          ,.link_i(recv_cmd_link_li)
          ,.link_o(recv_resp_link_lo)
