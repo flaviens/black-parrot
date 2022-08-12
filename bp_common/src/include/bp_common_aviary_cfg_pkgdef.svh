@@ -290,7 +290,7 @@
       ,bedrock_data_width   : 64
 
       ,l2_en               : 1
-      ,l2_banks            : 2
+      ,l2_banks            : 1
       ,l2_amo_support      : (1 << e_amo_swap)
                              | (1 << e_amo_fetch_logic)
                              | (1 << e_amo_fetch_arithmetic)

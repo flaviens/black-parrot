@@ -24,22 +24,21 @@ module bp_nonsynth_nbf_loader
    , input [did_width_p-1:0]                        did_i
 
    , output logic [mem_header_width_lp-1:0]         mem_cmd_header_o
-   , output logic [io_data_width_p-1:0]             mem_cmd_data_o
-   , output logic                                   mem_cmd_v_o
-   , input                                          mem_cmd_yumi_i
-   , output logic                                   mem_cmd_last_o
+   , output logic [io_data_width_p-1:0]             mem_cmd_critical_o
+   , output logic                                   mem_cmd_header_v_o
+   , input                                          mem_cmd_header_ready_and_i
 
    , input  [mem_header_width_lp-1:0]               mem_resp_header_i
-   , input  [io_data_width_p-1:0]                   mem_resp_data_i
-   , input                                          mem_resp_v_i
-   , output logic                                   mem_resp_ready_and_o
-   , input                                          mem_resp_last_i
+   , input  [io_data_width_p-1:0]                   mem_resp_critical_i
+   , input                                          mem_resp_header_v_i
+   , output logic                                   mem_resp_header_ready_and_o
 
    , output logic                                   done_o
    );
 
   // all messages are single beat
-  wire unused = &{mem_resp_data_i, mem_resp_last_i};
+  wire unused = &{mem_resp_critical_i};
+  assign mem_cmd_yumi_li = mem_cmd_header_ready_and_i & mem_cmd_header_v_o;
 
   enum logic [2:0] { e_reset, e_send, e_fence, e_read, e_done} state_n, state_r;
   wire is_reset    = (state_r == e_reset);
@@ -73,7 +72,7 @@ module bp_nonsynth_nbf_loader
   wire is_read_packet   = (curr_nbf.opcode[5] == 1'b1) & ~is_fence_packet & ~is_finish_packet;
   wire is_store_packet  = (curr_nbf.opcode[5] == 1'b0) & ~is_fence_packet & ~is_finish_packet;
 
-  wire next_nbf = (is_send_nbf && (mem_cmd_yumi_i || is_fence_packet || is_finish_packet));
+  wire next_nbf = (is_send_nbf && (mem_cmd_yumi_li || is_fence_packet || is_finish_packet));
   bsg_counter_clear_up
    #(.max_val_p(max_nbf_index_lp-1), .init_val_p(0))
    nbf_counter
@@ -107,15 +106,15 @@ module bp_nonsynth_nbf_loader
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.v_i(mem_cmd_yumi_i)
+     ,.v_i(mem_cmd_yumi_li)
      ,.ready_i(1'b1)
 
-     ,.yumi_i(mem_resp_v_i)
+     ,.yumi_i(mem_resp_header_v_i)
      ,.count_o(credit_count_lo)
      );
   wire credits_full_lo = (credit_count_lo == io_noc_max_credits_p);
   wire credits_empty_lo = (credit_count_lo == '0);
-  assign mem_resp_ready_and_o = 1'b1;
+  assign mem_resp_header_ready_and_o = 1'b1;
 
   localparam sel_width_lp = `BSG_SAFE_CLOG2(nbf_data_width_lp>>3);
   localparam size_width_lp = `BSG_SAFE_CLOG2(sel_width_lp);
@@ -126,7 +125,7 @@ module bp_nonsynth_nbf_loader
     (.data_i(curr_nbf.data)
      ,.sel_i('0) // We are aligned
      ,.size_i(mem_cmd_header_cast_o.size[0+:size_width_lp])
-     ,.data_o(mem_cmd_data_o)
+     ,.data_o(mem_cmd_critical_o)
      );
 
   always_comb
@@ -146,10 +145,9 @@ module bp_nonsynth_nbf_loader
       endcase
     end
 
-  assign mem_cmd_v_o = ~credits_full_lo & is_send_nbf & ~is_fence_packet & ~is_finish_packet;
-  assign mem_cmd_last_o = mem_cmd_v_o;
+  assign mem_cmd_header_v_o = ~credits_full_lo & is_send_nbf & ~is_fence_packet & ~is_finish_packet;
 
-  wire read_return = is_read & mem_resp_v_i & (mem_resp_header_cast_i.msg_type == e_bedrock_mem_uc_rd);
+  wire read_return = is_read & mem_resp_header_v_i & (mem_resp_header_cast_i.msg_type == e_bedrock_mem_uc_rd);
   always_comb
     unique casez (state_r)
       e_reset       : state_n = reset_i ? e_reset : e_send;
@@ -157,7 +155,7 @@ module bp_nonsynth_nbf_loader
                                 ? e_fence
                                 : is_finish_packet
                                   ? e_done
-                                  : (is_read_packet & mem_cmd_yumi_i)
+                                  : (is_read_packet & mem_cmd_yumi_li)
                                     ? e_read
                                     : e_send;
       e_read        : state_n = read_return ? e_send : e_read;
@@ -179,12 +177,8 @@ module bp_nonsynth_nbf_loader
     begin
       if (state_r != e_done && state_n == e_done)
         $display("NBF loader done!");
-      assert(reset_i !== '0 || ~read_return || read_data_r == mem_resp_data_i[0+:dword_width_gp])
-        else $error("Validation mismatch: addr: %d %d %d", mem_resp_header_cast_i.addr, mem_resp_data_i, read_data_r);
-
-      if (mem_resp_v_i & mem_resp_ready_and_o)
-        assert(reset_i !== '0 || ~(mem_resp_v_i & mem_resp_ready_and_o & ~mem_resp_last_i))
-          else $error("Multi-beat IO response detected");
+      assert(reset_i !== '0 || ~read_return || read_data_r == mem_resp_critical_i[0+:dword_width_gp])
+        else $error("Validation mismatch: addr: %d %d %d", mem_resp_header_cast_i.addr, mem_resp_critical_i, read_data_r);
     end
   //synopsys translate_on
 

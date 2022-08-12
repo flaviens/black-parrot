@@ -33,15 +33,23 @@ module bp_me_cce_to_cache
 
    // BedRock Stream interface
    , input [mem_header_width_lp-1:0]                       mem_cmd_header_i
+   , input [dword_width_gp-1:0]                            mem_cmd_critical_i
+   , input                                                 mem_cmd_header_v_i
+   , output logic                                          mem_cmd_header_ready_and_o
+   , input                                                 mem_cmd_has_data_i
    , input [l2_data_width_p-1:0]                           mem_cmd_data_i
-   , input                                                 mem_cmd_v_i
-   , output logic                                          mem_cmd_ready_and_o
+   , input                                                 mem_cmd_data_v_i
+   , output logic                                          mem_cmd_data_ready_and_o
    , input                                                 mem_cmd_last_i
 
    , output logic [mem_header_width_lp-1:0]                mem_resp_header_o
+   , output logic [dword_width_gp-1:0]                     mem_resp_critical_o
+   , output logic                                          mem_resp_header_v_o
+   , input                                                 mem_resp_header_ready_and_i
+   , output logic                                          mem_resp_has_data_o
    , output logic [l2_data_width_p-1:0]                    mem_resp_data_o
-   , output logic                                          mem_resp_v_o
-   , input                                                 mem_resp_ready_and_i
+   , output logic                                          mem_resp_data_v_o
+   , input                                                 mem_resp_data_ready_and_i
    , output logic                                          mem_resp_last_o
 
    // cache-side
@@ -80,9 +88,10 @@ module bp_me_cce_to_cache
   logic [lg_l2_blocks_lp:0] tagst_received_r, tagst_received_n;
 
   bp_bedrock_mem_header_s mem_cmd_header_lo;
+  logic [dword_width_gp-1:0] mem_cmd_critical_lo;
   logic [l2_data_width_p-1:0] mem_cmd_data_lo, mem_resp_data_lo;
   logic mem_cmd_v_lo, mem_cmd_yumi_li;
-  logic mem_cmd_new_lo, mem_cmd_done_lo, mem_cmd_last_lo;
+  logic mem_cmd_new_lo, mem_cmd_last_lo;
   logic [paddr_width_p-1:0] mem_cmd_stream_addr_lo;
   bp_me_stream_pump_in
    #(.bp_params_p(bp_params_p)
@@ -94,23 +103,27 @@ module bp_me_cce_to_cache
      ,.header_els_p(2)
      ,.data_els_p(`BSG_MAX(2, cce_block_width_p/l2_data_width_p))
      )
-   cce_to_cache_pump_in
+   pump_in
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
      ,.msg_header_i(mem_cmd_header_i)
+     ,.msg_critical_i(mem_cmd_critical_i)
+     ,.msg_header_v_i(mem_cmd_header_v_i)
+     ,.msg_header_ready_and_o(mem_cmd_header_ready_and_o)
+     ,.msg_has_data_i(mem_cmd_has_data_i)
      ,.msg_data_i(mem_cmd_data_i)
-     ,.msg_v_i(mem_cmd_v_i)
+     ,.msg_data_v_i(mem_cmd_data_v_i)
+     ,.msg_data_ready_and_o(mem_cmd_data_ready_and_o)
      ,.msg_last_i(mem_cmd_last_i)
-     ,.msg_ready_and_o(mem_cmd_ready_and_o)
 
      ,.fsm_base_header_o(mem_cmd_header_lo)
+     ,.fsm_critical_o(mem_cmd_critical_lo)
      ,.fsm_addr_o(mem_cmd_stream_addr_lo)
      ,.fsm_data_o(mem_cmd_data_lo)
      ,.fsm_v_o(mem_cmd_v_lo)
-     ,.fsm_ready_and_i(mem_cmd_yumi_li)
+     ,.fsm_yumi_i(mem_cmd_yumi_li)
      ,.fsm_new_o(mem_cmd_new_lo)
-     ,.fsm_done_o(mem_cmd_done_lo)
      ,.fsm_last_o(mem_cmd_last_lo)
      );
 
@@ -120,7 +133,7 @@ module bp_me_cce_to_cache
   wire is_word_op = (mem_cmd_header_lo.size == e_bedrock_msg_size_4);
   wire is_csr     = (mem_cmd_header_lo.addr < dram_base_addr_gp);
   wire is_tagfl   = is_csr && (local_addr_cast.addr == cache_tagfl_addr_gp);
-  wire [daddr_width_p-1:0] tagfl_addr = mem_cmd_data_lo[0+:lg_l2_sets_lp+lg_l2_assoc_lp] << l2_block_offset_width_lp;
+  wire [daddr_width_p-1:0] tagfl_addr = mem_cmd_critical_lo[0+:lg_l2_sets_lp+lg_l2_assoc_lp] << l2_block_offset_width_lp;
 
   // cache packet data and mask mux elements
   // each mux has one element per power of 2 in [1, N] where N is log2(L2 data width bytes)
@@ -205,7 +218,7 @@ module bp_me_cce_to_cache
   bp_bedrock_mem_header_s mem_resp_header_lo;
   logic [lg_l2_banks_lp-1:0] cache_resp_bank_lo;
   logic mem_header_v_lo, mem_resp_ready_and_lo, mem_resp_v_li;
-  logic mem_resp_done_lo;
+  logic mem_resp_last_lo;
   logic stream_fifo_ready_lo;
   bsg_fifo_1r1w_small
    #(.width_p(lg_l2_banks_lp+$bits(bp_bedrock_mem_header_s)), .els_p(l2_outstanding_reqs_p))
@@ -214,12 +227,12 @@ module bp_me_cce_to_cache
      ,.reset_i(reset_i)
 
      ,.data_i({cache_cmd_bank_lo, mem_cmd_header_lo})
-     ,.v_i(mem_cmd_new_lo)
+     ,.v_i(mem_cmd_yumi_li & mem_cmd_new_lo)
      ,.ready_o(stream_fifo_ready_lo)
 
      ,.data_o({cache_resp_bank_lo, mem_resp_header_lo})
      ,.v_o(mem_header_v_lo)
-     ,.yumi_i(mem_resp_done_lo)
+     ,.yumi_i(mem_resp_ready_and_lo & mem_resp_v_li & mem_resp_last_lo)
      );
 
   bp_me_stream_pump_out
@@ -228,26 +241,30 @@ module bp_me_cce_to_cache
      ,.block_width_p(cce_block_width_p)
      ,.payload_width_p(mem_payload_width_lp)
      ,.msg_stream_mask_p(mem_resp_payload_mask_gp)
-     ,.fsm_stream_mask_p(mem_cmd_payload_mask_gp | mem_resp_payload_mask_gp)
+     ,.fsm_stream_mask_p(mem_resp_payload_mask_gp)
      )
-   cce_to_cache_pump_out
+   pump_out
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
      ,.msg_header_o(mem_resp_header_o)
+     ,.msg_critical_o(mem_resp_critical_o)
+     ,.msg_header_v_o(mem_resp_header_v_o)
+     ,.msg_header_ready_and_i(mem_resp_header_ready_and_i)
+     ,.msg_has_data_o(mem_resp_has_data_o)
      ,.msg_data_o(mem_resp_data_o)
-     ,.msg_v_o(mem_resp_v_o)
+     ,.msg_data_v_o(mem_resp_data_v_o)
+     ,.msg_data_ready_and_i(mem_resp_data_ready_and_i)
      ,.msg_last_o(mem_resp_last_o)
-     ,.msg_ready_and_i(mem_resp_ready_and_i)
 
      ,.fsm_base_header_i(mem_resp_header_lo)
+     ,.fsm_critical_i(mem_resp_data_lo[0+:dword_width_gp])
      ,.fsm_data_i(mem_resp_data_lo)
      ,.fsm_v_i(mem_resp_v_li)
      ,.fsm_ready_and_o(mem_resp_ready_and_lo)
      ,.fsm_cnt_o(/* unused */)
      ,.fsm_new_o(/* unused */)
-     ,.fsm_last_o(/* unused */)
-     ,.fsm_done_o(mem_resp_done_lo)
+     ,.fsm_last_o(mem_resp_last_lo)
      );
 
   // mem_resp data selection
@@ -392,7 +409,8 @@ module bp_me_cce_to_cache
             else
               begin
                 cache_pkt.addr = cache_pkt_addr_lo;
-                cache_pkt.data = mem_cmd_data_lo;
+                // TODO: Drop critical word write
+                cache_pkt.data = mem_cmd_new_lo ? mem_cmd_critical_lo : mem_cmd_data_lo;
                 // This mask is only used for the LM/SM operations for >64 bit mask operations,
                 // but it gets set regardless of operation
                 cache_pkt.mask = cache_pkt_mask_lo;

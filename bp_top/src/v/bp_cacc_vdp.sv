@@ -40,15 +40,6 @@ module bp_cacc_vdp
     , output logic                                lce_cmd_data_ready_and_o
     , input                                       lce_cmd_last_i
 
-    , input [lce_fill_header_width_lp-1:0]        lce_fill_header_i
-    , input                                       lce_fill_header_v_i
-    , output logic                                lce_fill_header_ready_and_o
-    , input                                       lce_fill_has_data_i
-    , input [acache_fill_width_p-1:0]             lce_fill_data_i
-    , input                                       lce_fill_data_v_i
-    , output logic                                lce_fill_data_ready_and_o
-    , input                                       lce_fill_last_i
-
     , output logic [lce_fill_header_width_lp-1:0] lce_fill_header_o
     , output logic                                lce_fill_header_v_o
     , input                                       lce_fill_header_ready_and_i
@@ -421,7 +412,7 @@ module bp_cacc_vdp
         e_wait_dcache_c2: begin
           //if load: load both input vectors
           //if store: go to e_done after store
-          state_n = ~(lce_cmd_header_v_i | lce_fill_header_v_i) ? e_wait_dcache_c2 : e_wait_fetch;
+          state_n = ~lce_cmd_header_v_i ? e_wait_dcache_c2 : e_wait_fetch;
         end
         e_check_vec1_len: begin
           state_n = (len_a_cnt == input_len) ? e_fetch_vec2 : e_wait_fetch;

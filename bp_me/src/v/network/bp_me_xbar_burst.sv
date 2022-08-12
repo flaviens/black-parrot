@@ -31,6 +31,7 @@ module bp_me_xbar_burst
    , input                                                            reset_i
 
    , input [num_source_p-1:0][xbar_header_width_lp-1:0]               msg_header_i
+   , input [num_source_p-1:0][dword_width_gp-1:0]                     msg_critical_i
    , input [num_source_p-1:0]                                         msg_header_v_i
    , output logic [num_source_p-1:0]                                  msg_header_ready_and_o
    , input [num_source_p-1:0]                                         msg_has_data_i
@@ -41,6 +42,7 @@ module bp_me_xbar_burst
    , input [num_source_p-1:0][lg_num_sink_lp-1:0]                     msg_dst_i
 
    , output logic [num_sink_p-1:0][xbar_header_width_lp-1:0]          msg_header_o
+   , output logic [num_sink_p-1:0][dword_width_gp-1:0]                msg_critical_o
    , output logic [num_sink_p-1:0]                                    msg_header_v_o
    , input [num_sink_p-1:0]                                           msg_header_ready_and_i
    , output logic [num_sink_p-1:0]                                    msg_has_data_o
@@ -52,6 +54,7 @@ module bp_me_xbar_burst
 
   `declare_bp_bedrock_if(paddr_width_p, payload_width_p, lce_id_width_p, lce_assoc_p, xbar);
   bp_bedrock_xbar_header_s [num_source_p-1:0] msg_header_li;
+  logic [num_source_p-1:0][dword_width_gp-1:0] msg_critical_li;
   logic [num_source_p-1:0] msg_header_v_li, msg_header_yumi_lo, msg_has_data_li;
   logic [num_source_p-1:0][data_width_p-1:0] msg_data_li;
   logic [num_source_p-1:0][lg_num_sink_lp-1:0] msg_dst_li;
@@ -65,16 +68,16 @@ module bp_me_xbar_burst
   for (genvar i = 0; i < num_source_p; i++)
     begin : buffer
       bsg_two_fifo
-       #(.width_p(lg_num_sink_lp+1+xbar_header_width_lp))
+       #(.width_p(lg_num_sink_lp+1+dword_width_gp+xbar_header_width_lp))
        header_fifo
         (.clk_i(clk_i)
          ,.reset_i(reset_i)
  
-         ,.data_i({msg_dst_i[i], msg_has_data_i[i], msg_header_i[i]})
+         ,.data_i({msg_dst_i[i], msg_has_data_i[i], msg_critical_i[i], msg_header_i[i]})
          ,.v_i(msg_header_v_i[i])
          ,.ready_o(msg_header_ready_and_o[i])
  
-         ,.data_o({msg_dst_li[i], msg_has_data_li[i], msg_header_li[i]})
+         ,.data_o({msg_dst_li[i], msg_has_data_li[i], msg_critical_li[i], msg_header_li[i]})
          ,.v_o(msg_header_v_li[i])
          ,.yumi_i(msg_header_yumi_lo[i])
          );
@@ -147,10 +150,10 @@ module bp_me_xbar_burst
      ,.grants_oi_one_hot_o(grants_oi_one_hot_lo)
      );
 
-  logic [num_source_p-1:0][xbar_header_width_lp+1-1:0] header_source_combine;
-  logic [num_sink_p-1:0][xbar_header_width_lp+1-1:0] header_sink_combine;
+  logic [num_source_p-1:0][dword_width_gp+xbar_header_width_lp+1-1:0] header_source_combine;
+  logic [num_sink_p-1:0][dword_width_gp+xbar_header_width_lp+1-1:0] header_sink_combine;
   bsg_crossbar_o_by_i
-   #(.i_els_p(num_source_p), .o_els_p(num_sink_p), .width_p(1+xbar_header_width_lp))
+   #(.i_els_p(num_source_p), .o_els_p(num_sink_p), .width_p(1+dword_width_gp+xbar_header_width_lp))
    header_cb
     (.i(header_source_combine)
      ,.sel_oi_one_hot_i(grants_oi_one_hot_lo)
@@ -174,7 +177,7 @@ module bp_me_xbar_burst
       assign msg_header_yumi_lo[i] = cb_yumi_lo[i] & ~src_is_data_r[i];
       assign msg_data_yumi_lo[i] = cb_yumi_lo[i] & src_is_data_r[i];
 
-      assign header_source_combine[i] = {msg_has_data_li[i], msg_header_li[i]};
+      assign header_source_combine[i] = {msg_has_data_li[i], msg_critical_li[i], msg_header_li[i]};
       assign data_source_combine[i] = {msg_last_li[i], msg_data_li[i]};
     end
 
@@ -185,7 +188,7 @@ module bp_me_xbar_burst
       assign cb_ready_and_li[i] = dst_is_data_r[i] ? msg_data_ready_and_i[i] : msg_header_ready_and_i[i];
       assign cb_unlock_li[i] = (msg_header_ready_and_i[i] & msg_header_v_o[i] & ~msg_has_data_o[i]) || (msg_data_ready_and_i[i] & msg_data_v_o[i] & msg_last_o[i]);
 
-      assign {msg_has_data_o[i], msg_header_o[i]} = header_sink_combine[i];
+      assign {msg_has_data_o[i], msg_critical_o[i], msg_header_o[i]} = header_sink_combine[i];
       assign {msg_last_o[i], msg_data_o[i]} = data_sink_combine[i];
     end
 

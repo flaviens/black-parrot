@@ -29,16 +29,14 @@ module bp_nonsynth_host
    , input                                          reset_i
 
    , input [mem_header_width_lp-1:0]                mem_cmd_header_i
-   , input [dword_width_gp-1:0]                     mem_cmd_data_i
-   , input                                          mem_cmd_v_i
-   , output logic                                   mem_cmd_ready_and_o
-   , input                                          mem_cmd_last_i
+   , input [dword_width_gp-1:0]                     mem_cmd_critical_i
+   , input                                          mem_cmd_header_v_i
+   , output logic                                   mem_cmd_header_ready_and_o
 
    , output logic [mem_header_width_lp-1:0]         mem_resp_header_o
-   , output logic [dword_width_gp-1:0]              mem_resp_data_o
-   , output logic                                   mem_resp_v_o
-   , input                                          mem_resp_ready_and_i
-   , output logic                                   mem_resp_last_o
+   , output logic [dword_width_gp-1:0]              mem_resp_critical_o
+   , output logic                                   mem_resp_header_v_o
+   , input                                          mem_resp_header_ready_and_i
 
    , output logic                                   icache_trace_en_o
    , output logic                                   dcache_trace_en_o
@@ -119,18 +117,8 @@ module bp_nonsynth_host
   assign mem_cmd_header_li = mem_cmd_header_i;
   wire [hio_width_p-1:0] hio_id = mem_cmd_header_li.addr[paddr_width_p-1-:hio_width_p];
   always_comb
-    if (mem_cmd_v_i & (hio_id != '0))
+    if (mem_cmd_header_v_i & (hio_id != '0))
       $display("Warning: Accessing hio %0h. Sending loopback message!", hio_id);
-
-  always_ff @(negedge clk_i)
-    begin
-      if (~reset_i & mem_cmd_v_i & mem_cmd_ready_and_o)
-        if (~mem_cmd_last_i)
-          $error("Error: multi-beat mem cmd detected in nonsynth host");
-      if (~reset_i & mem_resp_v_o & mem_resp_ready_and_i)
-        if (~mem_resp_last_o)
-          $error("Error: multi-beat mem resp detected in nonsynth host");
-    end
 
   // for some reason, VCS doesn't like finish_w_v_li << addr_core_enc
   wire [num_core_p-1:0] finish_set = finish_w_v_li ? (1'b1 << addr_core_enc) : 1'b0;
@@ -165,7 +153,7 @@ module bp_nonsynth_host
       if (getchar_r_v_li)
         pop();
 
-      if (mem_cmd_ready_and_o & mem_cmd_v_i & (hio_id != '0))
+      if (mem_cmd_header_ready_and_o & mem_cmd_header_v_i & (hio_id != '0))
         $error("Warning: Accesing illegal hio %0h. Sending loopback message!", hio_id);
       for (integer i = 0; i < num_core_p; i++)
         begin

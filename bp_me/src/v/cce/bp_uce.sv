@@ -58,15 +58,23 @@ module bp_uce
     , input [cache_stat_info_width_lp-1:0]           stat_mem_i
 
     , output logic [mem_header_width_lp-1:0]         mem_cmd_header_o
+    , output logic [dword_width_gp-1:0]              mem_cmd_critical_o
+    , output logic                                   mem_cmd_header_v_o
+    , input                                          mem_cmd_header_ready_and_i
+    , output logic                                   mem_cmd_has_data_o
     , output logic [fill_width_p-1:0]                mem_cmd_data_o
-    , output logic                                   mem_cmd_v_o
-    , input                                          mem_cmd_ready_and_i
+    , output logic                                   mem_cmd_data_v_o
+    , input                                          mem_cmd_data_ready_and_i
     , output logic                                   mem_cmd_last_o
 
     , input [mem_header_width_lp-1:0]                mem_resp_header_i
+    , input [dword_width_gp-1:0]                     mem_resp_critical_i
+    , input                                          mem_resp_header_v_i
+    , output logic                                   mem_resp_header_ready_and_o
+    , input                                          mem_resp_has_data_i
     , input [fill_width_p-1:0]                       mem_resp_data_i
-    , input                                          mem_resp_v_i
-    , output logic                                   mem_resp_ready_and_o
+    , input                                          mem_resp_data_v_i
+    , output logic                                   mem_resp_data_ready_and_o
     , input                                          mem_resp_last_i
     );
 
@@ -221,10 +229,11 @@ module bp_uce
      );
 
   bp_bedrock_mem_header_s fsm_cmd_header_lo;
+  logic [dword_width_gp-1:0] fsm_cmd_critical_lo;
   logic [fill_width_p-1:0] fsm_cmd_data_lo;
   logic fsm_cmd_v_lo, fsm_cmd_ready_and_li;
   logic [fill_cnt_width_lp-1:0] fsm_cmd_cnt;
-  logic fsm_cmd_new, fsm_cmd_done;
+  logic fsm_cmd_new, fsm_cmd_last;
   bp_me_stream_pump_out
    #(.bp_params_p(bp_params_p)
      ,.stream_data_width_p(fill_width_p)
@@ -238,26 +247,31 @@ module bp_uce
      ,.reset_i(reset_i)
 
      ,.msg_header_o(mem_cmd_header_o)
+     ,.msg_critical_o(mem_cmd_critical_o)
+     ,.msg_header_v_o(mem_cmd_header_v_o)
+     ,.msg_header_ready_and_i(mem_cmd_header_ready_and_i)
+     ,.msg_has_data_o(mem_cmd_has_data_o)
      ,.msg_data_o(mem_cmd_data_o)
-     ,.msg_v_o(mem_cmd_v_o)
+     ,.msg_data_v_o(mem_cmd_data_v_o)
+     ,.msg_data_ready_and_i(mem_cmd_data_ready_and_i)
      ,.msg_last_o(mem_cmd_last_o)
-     ,.msg_ready_and_i(mem_cmd_ready_and_i)
 
      ,.fsm_base_header_i(fsm_cmd_header_lo)
+     ,.fsm_critical_i(fsm_cmd_critical_lo)
      ,.fsm_data_i(fsm_cmd_data_lo)
      ,.fsm_v_i(fsm_cmd_v_lo)
      ,.fsm_ready_and_o(fsm_cmd_ready_and_li)
      ,.fsm_cnt_o(fsm_cmd_cnt)
      ,.fsm_new_o(fsm_cmd_new)
-     ,.fsm_done_o(fsm_cmd_done)
-     ,.fsm_last_o(/* unused */)
+     ,.fsm_last_o(fsm_cmd_last)
      );
 
   bp_bedrock_mem_header_s fsm_resp_header_li;
   logic [paddr_width_p-1:0] fsm_resp_addr_li;
   logic [fill_width_p-1:0] fsm_resp_data_li;
+  logic [dword_width_gp-1:0] fsm_resp_critical_li;
   logic fsm_resp_v_li, fsm_resp_yumi_lo;
-  logic fsm_resp_new, fsm_resp_done;
+  logic fsm_resp_new, fsm_resp_last;
   bp_me_stream_pump_in
    #(.bp_params_p(bp_params_p)
      ,.stream_data_width_p(fill_width_p)
@@ -273,19 +287,23 @@ module bp_uce
      ,.reset_i(reset_i)
 
      ,.msg_header_i(mem_resp_header_i)
+     ,.msg_critical_i(mem_resp_critical_i)
+     ,.msg_header_v_i(mem_resp_header_v_i)
+     ,.msg_header_ready_and_o(mem_resp_header_ready_and_o)
+     ,.msg_has_data_i(mem_resp_has_data_i)
      ,.msg_data_i(mem_resp_data_i)
-     ,.msg_v_i(mem_resp_v_i)
+     ,.msg_data_v_i(mem_resp_data_v_i)
+     ,.msg_data_ready_and_o(mem_resp_data_ready_and_o)
      ,.msg_last_i(mem_resp_last_i)
-     ,.msg_ready_and_o(mem_resp_ready_and_o)
 
      ,.fsm_base_header_o(fsm_resp_header_li)
      ,.fsm_addr_o(fsm_resp_addr_li)
      ,.fsm_data_o(fsm_resp_data_li)
+     ,.fsm_critical_o(fsm_resp_critical_li)
      ,.fsm_v_o(fsm_resp_v_li)
-     ,.fsm_ready_and_i(fsm_resp_yumi_lo)
+     ,.fsm_yumi_i(fsm_resp_yumi_lo)
      ,.fsm_new_o(fsm_resp_new)
-     ,.fsm_done_o(fsm_resp_done)
-     ,.fsm_last_o(/* unused */)
+     ,.fsm_last_o(fsm_resp_last)
      );
 
   // We check for uncached stores ealier than other requests, because they get sent out in ready
@@ -352,23 +370,18 @@ module bp_uce
   // Outstanding Requests Counter - counts all requests, cached and uncached
   //
   logic [`BSG_WIDTH(coh_noc_max_credits_p)-1:0] credit_count_lo;
-  // credit consumed when memory command sends
-  wire credit_v_li = fsm_cmd_done;
-  // credit returned when memory response fully consumed
-  wire credit_returned_li = fsm_resp_done;
   bsg_flow_counter
-   #(.els_p(coh_noc_max_credits_p)
-      // memory command increments on done singal from stream pump
-      ,.ready_THEN_valid_p(1)
-      )
+   #(.els_p(coh_noc_max_credits_p))
    credit_counter
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.v_i(credit_v_li)
-     ,.ready_i(1'b0) // unused due to ready_then_valid param
+     // credit consumed when memory command sends
+     ,.v_i(fsm_cmd_v_lo & fsm_cmd_last)
+     ,.ready_i(fsm_cmd_ready_and_li)
 
-     ,.yumi_i(credit_returned_li)
+     // credit returned when memory response fully consumed
+     ,.yumi_i(fsm_resp_yumi_lo & fsm_resp_last)
      ,.count_o(credit_count_lo)
      );
   assign cache_req_credits_full_o = (credit_count_lo == coh_noc_max_credits_p);
@@ -447,6 +460,7 @@ module bp_uce
 
       fsm_cmd_header_lo = '0;
       fsm_cmd_data_lo = '0;
+      fsm_cmd_critical_lo = '0;
       fsm_cmd_v_lo = '0;
 
       load_resp_yumi_lo = '0;
@@ -524,12 +538,14 @@ module bp_uce
             fsm_cmd_header_lo.size           = block_msg_size_lp;
             fsm_cmd_header_lo.payload.lce_id = lce_id_i;
             fsm_cmd_data_lo                  = writeback_data;
+            // TODO: Align cache packets with cache data and mux into the network
+            fsm_cmd_critical_lo              = writeback_data[0+:dword_width_gp];
             fsm_cmd_v_lo = ~cache_req_credits_full_o;
 
-            way_up = fsm_cmd_done;
+            way_up = fsm_cmd_ready_and_li & fsm_cmd_v_lo & fsm_cmd_last;
             index_up = way_done & way_up;
 
-            state_n = (fsm_cmd_done & index_done & way_done)
+            state_n = (index_done & way_done)
                       ? e_flush_fence
                       : index_up
                         ? e_flush_read
@@ -553,7 +569,8 @@ module bp_uce
                 fsm_cmd_header_lo.size           = bp_bedrock_msg_size_e'(cache_req_r.size);
                 fsm_cmd_header_lo.payload.lce_id = lce_id_i;
                 fsm_cmd_header_lo.subop          = mem_wr_subop;
-                fsm_cmd_data_lo                  = cache_req_r.data;
+                fsm_cmd_data_lo                  = {fill_width_p/dword_width_gp{cache_req_r.data}};
+                fsm_cmd_critical_lo              = cache_req_r.data;
                 fsm_cmd_v_lo = ~cache_req_credits_full_o;
 
                 cache_req_done = fsm_cmd_ready_and_li & fsm_cmd_v_lo;
@@ -602,9 +619,15 @@ module bp_uce
             fsm_cmd_header_lo.size           = block_msg_size_lp;
             fsm_cmd_header_lo.payload.lce_id = lce_id_i;
             fsm_cmd_data_lo                  = writeback_data;
+            // TODO: Align cache packets with cache data and mux into the network
+            fsm_cmd_critical_lo              = writeback_data[0+:dword_width_gp];
             fsm_cmd_v_lo = ~cache_req_credits_full_o;
 
-            state_n = fsm_cmd_done ? uc_store_v_r ? e_ready : e_send_critical : e_uc_writeback_write_req;
+            state_n = (fsm_cmd_ready_and_li & fsm_cmd_v_lo & fsm_cmd_last)
+                      ? uc_store_v_r
+                        ? e_ready
+                        : e_send_critical
+                      : e_uc_writeback_write_req;
           end
 
         e_send_critical:
@@ -630,7 +653,8 @@ module bp_uce
               fsm_cmd_header_lo.size     = bp_bedrock_msg_size_e'(cache_req_r.size);
               fsm_cmd_header_lo.payload.lce_id = lce_id_i;
               fsm_cmd_header_lo.subop    = mem_wr_subop;
-              fsm_cmd_data_lo            = cache_req_r.data;
+              fsm_cmd_data_lo            = {fill_width_p/dword_width_gp{cache_req_r.data}};
+              fsm_cmd_critical_lo        = cache_req_r.data;
               fsm_cmd_v_lo = ~cache_req_credits_full_o;
 
               state_n = (fsm_cmd_ready_and_li & fsm_cmd_v_lo)
@@ -677,7 +701,7 @@ module bp_uce
             data_mem_pkt_v_o = load_resp_v_li;
 
             load_resp_yumi_lo = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
-            cache_req_done = fsm_resp_done & load_resp_yumi_lo;
+            cache_req_done = load_resp_yumi_lo & fsm_resp_last;
             state_n = cache_req_done ? e_writeback_write_req : e_writeback_read_req;
           end
         e_writeback_write_req:
@@ -687,9 +711,11 @@ module bp_uce
             fsm_cmd_header_lo.size           = block_msg_size_lp;
             fsm_cmd_header_lo.payload.lce_id = lce_id_i;
             fsm_cmd_data_lo                  = writeback_data;
+            // TODO: Align cache packets with cache data and mux into the network
+            fsm_cmd_critical_lo              = writeback_data[0+:dword_width_gp];
             fsm_cmd_v_lo = ~cache_req_credits_full_o;
 
-            state_n = fsm_cmd_done ? e_ready : e_writeback_write_req;
+            state_n = (fsm_cmd_ready_and_li & fsm_cmd_v_lo & fsm_cmd_last) ? e_ready : e_writeback_write_req;
           end
         e_read_wait:
           begin
@@ -700,23 +726,24 @@ module bp_uce
             tag_mem_pkt_cast_o.way_id = fsm_resp_header_li.payload.way_id[0+:`BSG_SAFE_CLOG2(assoc_p)];
             tag_mem_pkt_cast_o.state  = e_COH_M;
             tag_mem_pkt_cast_o.tag    = fsm_resp_addr_li[block_offset_width_lp+index_width_lp+:ctag_width_p];
-            tag_mem_pkt_v_o = load_resp_v_li;
+            tag_mem_pkt_v_o = load_resp_v_li & critical_pending;
 
-            data_mem_pkt_cast_o.opcode = e_cache_data_mem_write;
+            data_mem_pkt_cast_o.opcode = critical_pending ? e_cache_data_mem_uncached : e_cache_data_mem_write;
             data_mem_pkt_cast_o.index  = fsm_resp_addr_li[block_offset_width_lp+:index_width_lp];
             data_mem_pkt_cast_o.way_id = fsm_resp_header_li.payload.way_id[0+:`BSG_SAFE_CLOG2(assoc_p)];
-            data_mem_pkt_cast_o.data   = fsm_resp_data_li;
+            data_mem_pkt_cast_o.data   = critical_pending ? {(fill_width_p/dword_width_gp){fsm_resp_critical_li}} : fsm_resp_data_li;
             data_mem_pkt_cast_o.fill_index = 1'b1 << fill_index_shift;
             data_mem_pkt_v_o = load_resp_v_li;
 
-            load_resp_yumi_lo = tag_mem_pkt_yumi_i & data_mem_pkt_yumi_i;
-            cache_req_done = fsm_resp_done & load_resp_yumi_lo;
+            load_resp_yumi_lo = data_mem_pkt_yumi_i & (~critical_pending | tag_mem_pkt_yumi_i);
+            cache_req_done = fsm_resp_last & load_resp_yumi_lo;
             state_n = cache_req_done ? e_ready : e_read_wait;
           end
+        // TODO: Combine with read wait
         e_uc_read_wait:
           begin
             data_mem_pkt_cast_o.opcode = e_cache_data_mem_uncached;
-            data_mem_pkt_cast_o.data = {(fill_width_p/dword_width_gp){fsm_resp_data_li[0+:dword_width_gp]}};
+            data_mem_pkt_cast_o.data = {(fill_width_p/dword_width_gp){fsm_resp_critical_li}};
             data_mem_pkt_v_o = load_resp_v_li;
 
             cache_req_done = data_mem_pkt_yumi_i;

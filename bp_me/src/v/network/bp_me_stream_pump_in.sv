@@ -26,16 +26,13 @@ module bp_me_stream_pump_in
    // Bitmasks that specify which message types may have multiple beats on either
    // the msg input side or FSM output side.
    // Each mask is constructed as (1 << e_rd/wr_msg | 1 << e_uc_rd/wr_msg)
-   // There are three cases:
-   // 1. Message types that are set in msg_stream_mask_p but not in
-   //    fsm_stream_mask_p will result in N:1 conversion from msg->FSM ports.
-   //    This is rarely used.
-   // 2. Message types that are set as part of fsm_stream_mask_p but not set in
+   // There are two cases:
+   // 1. Message types that are set as part of fsm_stream_mask_p but not set in
    //    msg_stream_mask_p result in a 1:N conversion from msg->FSM ports.
    //    For example, in BlackParrot a read command for 64B to the
    //    cache arriving on the BedRock Stream input can be decomposed into a stream of
    //    8B reads on the FSM output port.
-   // 3. Message types set in both will have N:N beats. Every beat on the input
+   // 2. Message types set in both will have N:N beats. Every beat on the input
    //    will produce a beat on the output. This is commonly used for all messages
    //    with data payloads.
    // Constructed as (1 << e_rd/wr_msg | 1 << e_uc_rd/wr_msg)
@@ -48,7 +45,6 @@ module bp_me_stream_pump_in
    , localparam stream_bytes_lp = stream_data_width_p >> 3
    , localparam stream_offset_width_lp = `BSG_SAFE_CLOG2(stream_bytes_lp)
    , localparam stream_words_lp = block_width_p / stream_data_width_p
-   , localparam stream_cnt_width_lp = `BSG_SAFE_CLOG2(stream_words_lp)
 
    // number of messages that can be buffered
    , parameter header_els_p = 0
@@ -59,146 +55,166 @@ module bp_me_stream_pump_in
 
    // Input BedRock Stream
    , input [xce_header_width_lp-1:0]                msg_header_i
+   , input [dword_width_gp-1:0]                     msg_critical_i
+   , input                                          msg_header_v_i
+   , output logic                                   msg_header_ready_and_o
+   , input                                          msg_has_data_i
+
    , input [stream_data_width_p-1:0]                msg_data_i
-   , input                                          msg_v_i
+   , input                                          msg_data_v_i
+   , output logic                                   msg_data_ready_and_o
    , input                                          msg_last_i
-   , output logic                                   msg_ready_and_o
 
    // FSM consumer side
+   // First critical, then data payload if any
    , output logic [xce_header_width_lp-1:0]         fsm_base_header_o
+   , output logic [dword_width_gp-1:0]              fsm_critical_o
    , output logic [paddr_width_p-1:0]               fsm_addr_o
    , output logic [stream_data_width_p-1:0]         fsm_data_o
    , output logic                                   fsm_v_o
-   , input                                          fsm_ready_and_i
+   , input                                          fsm_yumi_i
    // FSM control signals
-   // fsm_new is raised when first beat of every message is acked
+   // fsm_new is raised on first beat of every message
    , output logic                                   fsm_new_o
    // fsm_last is raised on last beat of every message
    , output logic                                   fsm_last_o
-   // fsm_done is raised when last beat of every message is acked
-   , output logic                                   fsm_done_o
    );
-
-  if (block_width_p % stream_data_width_p != 0)
-    $error("Stream pump block width must be multiple of stream data width");
 
   `declare_bp_bedrock_if(paddr_width_p, payload_width_p, lce_id_width_p, lce_assoc_p, xce);
   `bp_cast_i(bp_bedrock_xce_header_s, msg_header);
   `bp_cast_o(bp_bedrock_xce_header_s, fsm_base_header);
 
-  enum logic {e_ready, e_stream} state_n, state_r;
-  wire is_ready  = (state_r == e_ready);
-  wire is_stream = (state_r == e_stream);
+  enum logic [1:0]{e_ready, e_spray, e_burst} state_n, state_r;
+  wire is_ready = (state_r == e_ready);
+  wire is_spray = (state_r == e_spray);
+  wire is_burst = (state_r == e_burst);
 
-  bp_bedrock_xce_header_s msg_base_header_li;
-  logic [stream_data_width_p-1:0] msg_data_li;
-  logic msg_v_li, msg_ready_and_lo, msg_last_li;
-  bp_me_stream_fifo
-   #(.header_width_p($bits(bp_bedrock_xce_header_s))
-     ,.data_width_p(stream_data_width_p)
-     ,.header_els_p(header_els_p)
-     ,.data_els_p(data_els_p)
-     )
-   fifo
+  // TODO: Treat wraparound differently
+  bp_bedrock_xce_header_s msg_header_li;
+  logic [dword_width_gp-1:0] msg_critical_li;
+  logic msg_header_v_li, msg_header_yumi_lo, msg_has_data_li;
+  bsg_fifo_1r1w_small
+   #(.width_p(1+dword_width_gp+xce_header_width_lp), .els_p(header_els_p))
+   header_fifo
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.msg_header_i(msg_header_i)
-     ,.msg_data_i(msg_data_i)
-     ,.msg_v_i(msg_v_i)
-     ,.msg_last_i(msg_last_i)
-     ,.msg_ready_and_o(msg_ready_and_o)
+     ,.data_i({msg_has_data_i, msg_critical_i, msg_header_cast_i})
+     ,.v_i(msg_header_v_i)
+     ,.ready_o(msg_header_ready_and_o)
 
-     ,.msg_base_header_o(msg_base_header_li)
-     ,.msg_data_o(msg_data_li)
-     ,.msg_v_o(msg_v_li)
-     ,.msg_last_o(msg_last_li)
-     ,.msg_ready_and_i(msg_ready_and_lo)
+     ,.data_o({msg_has_data_li, msg_critical_li, msg_header_li})
+     ,.v_o(msg_header_v_li)
+     ,.yumi_i(msg_header_yumi_lo)
      );
+
+  logic [stream_data_width_p-1:0] msg_data_li;
+  logic msg_data_v_li, msg_data_yumi_lo, msg_last_li;
+  bsg_fifo_1r1w_small
+   #(.width_p(1+stream_data_width_p), .els_p(data_els_p))
+   data_fifo
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+
+     ,.data_i({msg_last_i, msg_data_i})
+     ,.v_i(msg_data_v_i)
+     ,.ready_o(msg_data_ready_and_o)
+
+     ,.data_o({msg_last_li, msg_data_li})
+     ,.v_o(msg_data_v_li)
+     ,.yumi_i(msg_data_yumi_lo)
+     );
+
+  localparam stream_cnt_width_lp = `BSG_SAFE_CLOG2(stream_words_lp);
 
   wire [stream_cnt_width_lp-1:0] stream_size =
-    `BSG_MAX((1'b1 << msg_base_header_li.size) / stream_bytes_lp, 1'b1) - 1'b1;
-  wire nz_stream  = stream_size > '0;
-  wire fsm_stream = fsm_stream_mask_p[msg_base_header_li.msg_type] & nz_stream;
-  wire msg_stream = msg_stream_mask_p[msg_base_header_li.msg_type] & nz_stream;
-  wire any_stream = fsm_stream | msg_stream;
+    `BSG_MAX((1'b1 << msg_header_li.size) / stream_bytes_lp, 1'b1) - 1'b1;
+  wire burst_stream = msg_header_li.size > e_bedrock_msg_size_8;
+  wire msg_stream = msg_stream_mask_p[msg_header_li.msg_type] & burst_stream;
+  wire fsm_stream = fsm_stream_mask_p[msg_header_li.msg_type] & burst_stream;
+  // TODO: Some combinations here are disallowed
+  wire do_burst = is_ready & fsm_stream &  msg_stream &  msg_has_data_li;
+  wire do_spray = is_ready & fsm_stream & ~msg_stream & ~msg_has_data_li;
 
-  logic [stream_cnt_width_lp-1:0] stream_cnt, wrap_cnt;
-  logic cnt_up;
-  wire cnt_set = fsm_new_o;
-  wire [stream_cnt_width_lp-1:0] size_li = fsm_stream ? stream_size : '0;
-  wire [stream_cnt_width_lp-1:0] first_cnt = msg_base_header_li.addr[stream_offset_width_lp+:stream_cnt_width_lp];
+  // TODO: The wrap address should be aligned to the stream bus width, not the critical word
+  logic [stream_cnt_width_lp-1:0] cnt_lo;
+  logic first_lo, last_lo;
   bp_me_stream_wraparound
-   #(.max_val_p(stream_words_lp-1))
-   wraparound_cnt
+   #(.max_val_p(stream_words_lp-1)
+     ,.addr_width_p(paddr_width_p)
+     ,.offset_width_p(stream_cnt_width_lp)
+     )
+   wraparound
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.size_i(size_li)
-     ,.set_i(cnt_set)
-     ,.val_i(first_cnt)
-     ,.en_i(cnt_up)
+     // TODO: Cleanup, don't increment on burst critical word
+     ,.en_i(fsm_yumi_i & ~do_burst & ~do_spray)
+     ,.size_i(stream_size)
+     ,.base_i(msg_header_li.addr)
 
-     ,.full_o(stream_cnt)
-     ,.wrap_o(wrap_cnt)
+     ,.addr_o(fsm_addr_o)
+     ,.cnt_o(cnt_lo)
+     ,.first_o(first_lo)
+     ,.last_o(last_lo)
      );
 
-  wire [stream_cnt_width_lp-1:0] last_cnt  = first_cnt + stream_size;
-  wire is_last_cnt = (is_stream & (stream_cnt == last_cnt)) | (~fsm_stream & ~msg_stream);
-
-  wire [paddr_width_p-1:0] wrap_addr =
-    {msg_base_header_li.addr[paddr_width_p-1:block_offset_width_lp]
-     ,{stream_words_lp>0{wrap_cnt}}
-     ,msg_base_header_li.addr[0+:stream_offset_width_lp]
-     };
+  wire burst_v_li = msg_header_v_li & msg_has_data_li;
+  wire spray_v_li = msg_header_v_li & ~msg_has_data_li;
 
   always_comb
     begin
-      fsm_base_header_cast_o = msg_base_header_li;
-      // keep the address to be the critical word address
-      fsm_base_header_cast_o.addr[0+:block_offset_width_lp] = msg_base_header_li.addr;
+      state_n = state_r;
+
+      fsm_base_header_cast_o = msg_header_li;
+      fsm_critical_o = msg_critical_li;
       fsm_data_o = msg_data_li;
 
-      if (~msg_stream & fsm_stream)
-        begin
-          // 1:N
-          // convert one msg message into stream of N FSM messages
-          fsm_v_o = msg_v_li;
-          msg_ready_and_lo = is_last_cnt & fsm_ready_and_i;
-          cnt_up = fsm_v_o & fsm_ready_and_i & ~is_last_cnt;
-          fsm_addr_o = is_stream ? wrap_addr : msg_base_header_li.addr;
-        end
-      else if (msg_stream & ~fsm_stream)
-        begin
-          // N:1
-          // consume all but last msg input beat silently, then FSM consumes last beat
-          fsm_v_o = msg_v_li & is_last_cnt;
-          msg_ready_and_lo = ~is_last_cnt | fsm_ready_and_i;
-          cnt_up = msg_v_li & msg_ready_and_lo & ~is_last_cnt;
-          // Hold address constant at critical address
-          fsm_addr_o = msg_base_header_li.addr;
-        end
-      else
-        begin
-          // 1:1
-          fsm_v_o = msg_v_li;
-          msg_ready_and_lo = fsm_ready_and_i;
-          cnt_up = fsm_v_o & fsm_ready_and_i & ~is_last_cnt;
-          fsm_addr_o = is_stream ? wrap_addr : msg_base_header_li.addr;
-        end
+      fsm_v_o = '0;
+      fsm_new_o = '0;
+      fsm_last_o = '0;
 
-      fsm_new_o  = is_ready & fsm_v_o & fsm_ready_and_i;
-      fsm_last_o = is_last_cnt & fsm_v_o;
-      fsm_done_o = fsm_last_o & fsm_ready_and_i;
+      msg_header_yumi_lo = '0;
+      msg_data_yumi_lo = '0;
+
+      case (state_r)
+        e_ready:
+          begin
+            fsm_v_o            = spray_v_li | burst_v_li;
+            fsm_new_o          = fsm_v_o;
+            fsm_last_o         = msg_header_v_li & ~burst_stream;
+            msg_header_yumi_lo = fsm_yumi_i & fsm_new_o & fsm_last_o;
+
+            state_n = fsm_yumi_i
+                      ? do_burst
+                        ? e_burst
+                        : do_spray
+                          ? e_spray 
+                          : e_ready
+                      : e_ready;
+          end
+        e_burst:
+          begin
+            fsm_v_o            = msg_data_v_li;
+            fsm_last_o         = last_lo;
+            msg_data_yumi_lo   = fsm_yumi_i;
+            msg_header_yumi_lo = msg_data_yumi_lo & msg_last_li;
+
+            state_n = msg_header_yumi_lo ? e_ready : e_burst;
+          end
+        e_spray:
+          begin
+            fsm_v_o            = msg_header_v_li;
+            fsm_last_o         = last_lo;
+            msg_header_yumi_lo = fsm_yumi_i & last_lo;
+
+            state_n = msg_header_yumi_lo ? e_ready : e_spray;
+          end
+        default : begin end
+      endcase
     end
 
-  always_comb
-    case (state_r)
-      e_stream: state_n = fsm_done_o ? e_ready : e_stream;
-      default : state_n = (fsm_new_o & any_stream) ? e_stream : e_ready;
-    endcase
-
-  //synopsys sync_set_reset "reset_i"
+  // synopsys sync_set_reset "reset_i"
   always_ff @(posedge clk_i)
     if (reset_i)
       state_r <= e_ready;

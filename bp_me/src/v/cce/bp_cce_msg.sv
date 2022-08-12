@@ -85,18 +85,15 @@ module bp_cce_msg
    , input [bedrock_data_width_p-1:0]               mem_resp_data_i
    , input                                          mem_resp_v_i
    , output logic                                   mem_resp_yumi_o
-   , input                                          mem_resp_stream_new_i
-   , input                                          mem_resp_stream_last_i
-   , input                                          mem_resp_stream_done_i
+   , input                                          mem_resp_last_i
 
    // memory command stream pump out
    , output logic [mem_header_width_lp-1:0]         mem_cmd_header_o
    , output logic [bedrock_data_width_p-1:0]        mem_cmd_data_o
    , output logic                                   mem_cmd_v_o
    , input                                          mem_cmd_ready_and_i
-   , input [data_len_width_lp-1:0]                  mem_cmd_stream_cnt_i
-   , input                                          mem_cmd_stream_new_i
-   , input                                          mem_cmd_stream_done_i
+   , input [data_len_width_lp-1:0]                  mem_cmd_cnt_i
+   , input                                          mem_cmd_last_i
 
    // Input signals to feed output commands
    , input [lce_id_width_p-1:0]                     lce_i
@@ -208,18 +205,15 @@ module bp_cce_msg
   // memory command/response counter
   logic [`BSG_WIDTH(mem_noc_max_credits_p)-1:0] mem_credit_count_lo;
   bsg_flow_counter
-    #(.els_p(mem_noc_max_credits_p)
-      // memory command increments on done singal from stream pump
-      ,.ready_THEN_valid_p(1)
-      )
+    #(.els_p(mem_noc_max_credits_p))
     mem_credit_counter
      (.clk_i(clk_i)
       ,.reset_i(reset_i)
       // memory commands consume credits
-      ,.v_i(mem_cmd_stream_done_i)
-      ,.ready_i(1'b0) // unused due to ready_then_valid param
+      ,.v_i(mem_cmd_v_o & mem_cmd_last_i)
+      ,.ready_i(mem_cmd_ready_and_i) // unused due to ready_then_valid param
       // memory responses return credits
-      ,.yumi_i(mem_resp_stream_done_i)
+      ,.yumi_i(mem_resp_ready_and_o & mem_resp_v_i & mem_resp_last_i)
       ,.count_o(mem_credit_count_lo)
       );
 
@@ -441,7 +435,7 @@ module bp_cce_msg
                 pending_w_addr_o = mem_resp_base_header_li.addr;
                 pending_o = 1'b0;
                 // if first beat is not last, drain remaining beats
-                mem_resp_state_n = (mem_resp_yumi_o & ~mem_resp_stream_last_i)
+                mem_resp_state_n = (mem_resp_yumi_o & ~mem_resp_last_i)
                                    ? e_mem_resp_drain_data
                                    : e_mem_resp_ready;
 
@@ -643,10 +637,10 @@ module bp_cce_msg
           mem_resp_busy_o = 1'b1;
           lce_cmd_data_o = mem_resp_data_i;
           lce_cmd_data_v_o = mem_resp_v_i;
-          lce_cmd_last_o = mem_resp_stream_last_i;
+          lce_cmd_last_o = mem_resp_last_i;
           // consume beat when data sends on LCE Cmd
           mem_resp_yumi_o = mem_resp_v_i & lce_cmd_data_ready_and_i;
-          mem_resp_state_n = (mem_resp_stream_done_i)
+          mem_resp_state_n = (mem_resp_yumi_o & mem_resp_last_i)
                              ? e_mem_resp_ready
                              : e_mem_resp_send_data;
 
@@ -655,7 +649,7 @@ module bp_cce_msg
           // when a speculative read is squashed, its data must be drained
           mem_resp_busy_o = 1'b1;
           mem_resp_yumi_o = mem_resp_v_i;
-          mem_resp_state_n = (mem_resp_stream_done_i)
+          mem_resp_state_n = (mem_resp_yumi_o & mem_resp_last_i)
                              ? e_mem_resp_ready
                              : e_mem_resp_drain_data;
 
@@ -724,7 +718,7 @@ module bp_cce_msg
           mem_cmd_v_o = lce_req_data_v_i & ~mem_credits_empty;
           lce_req_data_ready_and_o = mem_cmd_ready_and_i & ~mem_credits_empty;
           // LCE request header is only dequeued if stream pump indicates stream is done
-          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_stream_done_i;
+          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_last_i;
 
           // form message
           mem_cmd_base_header_lo.addr = lce_req_header_cast_i.addr;
@@ -734,7 +728,7 @@ module bp_cce_msg
           mem_cmd_base_header_lo.payload.uncached = 1'b1;
           mem_cmd_data_o = lce_req_data_i;
 
-          state_n = (mem_cmd_v_o & mem_cmd_ready_and_i) & ~mem_cmd_stream_done_i
+          state_n = (mem_cmd_v_o & mem_cmd_ready_and_i & ~mem_cmd_last_i)
                     ? e_uncached_only_data : e_uncached_only;
 
           mem_cmd_stall_o = ~(mem_cmd_v_o & mem_cmd_ready_and_i);
@@ -745,7 +739,7 @@ module bp_cce_msg
         else if (lce_req_header_v_i & (lce_req_header_cast_i.msg_type.req == e_bedrock_req_uc_rd)) begin
           // uncached load has no data
           mem_cmd_v_o = lce_req_header_v_i & ~mem_credits_empty;
-          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_stream_done_i;
+          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_last_i;
 
           mem_cmd_base_header_lo.addr = lce_req_header_cast_i.addr;
           mem_cmd_base_header_lo.size = lce_req_header_cast_i.size;
@@ -767,7 +761,7 @@ module bp_cce_msg
           mem_cmd_v_o = lce_req_data_v_i & ~mem_credits_empty;
           lce_req_data_ready_and_o = mem_cmd_ready_and_i & ~mem_credits_empty;
           // LCE request header is only dequeued if stream pump indicates stream is done
-          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_stream_done_i;
+          lce_req_header_yumi_o = mem_cmd_v_o & mem_cmd_ready_and_i & mem_cmd_last_i;
 
           // form message
           mem_cmd_base_header_lo.addr = lce_req_header_cast_i.addr;
@@ -779,7 +773,7 @@ module bp_cce_msg
 
           mem_cmd_stall_o = ~(mem_cmd_v_o & mem_cmd_ready_and_i);
 
-          state_n = mem_cmd_stream_done_i
+          state_n = (mem_cmd_ready_and_i & mem_cmd_v_o & mem_cmd_last_i)
                     ? e_uncached_only
                     : e_uncached_only_data;
         end
@@ -900,7 +894,7 @@ module bp_cce_msg
                 mem_cmd_base_header_lo.payload.uncached = 1'b1;
 
                 // only need to send more data if stream pump doesn't indicate stream is done
-                state_n = (mem_cmd_v_o & mem_cmd_ready_and_i & ~mem_cmd_stream_done_i)
+                state_n = (mem_cmd_v_o & mem_cmd_ready_and_i & ~mem_cmd_last_i)
                           ? e_send_data_req_to_mem_cmd
                           : e_ready;
 
@@ -923,7 +917,7 @@ module bp_cce_msg
                 mem_cmd_base_header_lo.payload.uncached = mshr.flags.uncached;
 
                 // only need to send more data if stream pump doesn't indicate stream is done
-                state_n = (mem_cmd_v_o & mem_cmd_ready_and_i & ~mem_cmd_stream_done_i)
+                state_n = (mem_cmd_v_o & mem_cmd_ready_and_i & ~mem_cmd_last_i)
                           ? e_send_data_resp_to_mem_cmd
                           : e_ready;
 
@@ -1085,7 +1079,7 @@ module bp_cce_msg
         mem_cmd_v_o = lce_req_data_v_i;
         lce_req_data_ready_and_o = mem_cmd_ready_and_i;
 
-        state_n = (mem_cmd_stream_done_i)
+        state_n = (mem_cmd_ready_and_i & mem_cmd_v_o & mem_cmd_last_i)
                   ? e_ready
                   : e_send_data_req_to_mem_cmd;
 
@@ -1100,7 +1094,7 @@ module bp_cce_msg
         mem_cmd_v_o = lce_resp_data_v_i;
         lce_resp_data_ready_and_o = mem_cmd_ready_and_i;
 
-        state_n = (mem_cmd_stream_done_i)
+        state_n = (mem_cmd_ready_and_i & mem_cmd_v_o & mem_cmd_last_i)
                   ? e_ready
                   : e_send_data_resp_to_mem_cmd;
 

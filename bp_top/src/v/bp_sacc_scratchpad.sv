@@ -16,13 +16,13 @@ module bp_sacc_scratchpad
    , input [lce_id_width_p-1:0]                 lce_id_i
 
    , input [mem_header_width_lp-1:0]            io_cmd_header_i
-   , input [acache_fill_width_p-1:0]            io_cmd_data_i
+   , input [dword_width_gp-1:0]                 io_cmd_critical_i
    , input                                      io_cmd_v_i
    , input                                      io_cmd_last_i
    , output logic                               io_cmd_ready_and_o
 
    , output logic [mem_header_width_lp-1:0]     io_resp_header_o
-   , output logic [acache_fill_width_p-1:0]     io_resp_data_o
+   , output logic [dword_width_gp-1:0]          io_resp_critical_o
    , output logic                               io_resp_v_o
    , output logic                               io_resp_last_o
    , input                                      io_resp_ready_and_i

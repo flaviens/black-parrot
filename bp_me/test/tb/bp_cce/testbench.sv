@@ -731,57 +731,57 @@ module testbench
        ,.mem_resp_last_i(mem_resp_last_o)
        );
 
-  bind bp_lce
-    bp_me_nonsynth_lce_tracer
-      #(.bp_params_p(bp_params_p)
-        ,.sets_p(sets_p)
-        ,.assoc_p(assoc_p)
-        ,.block_width_p(block_width_p)
-        ,.fill_width_p(fill_width_p)
-        )
-      lce_tracer
-       (.clk_i(clk_i & testbench.lce_trace_en)
-        ,.reset_i(reset_i)
-        ,.lce_id_i(lce_id_i)
+  //bind bp_lce
+    //bp_me_nonsynth_lce_tracer
+    //  #(.bp_params_p(bp_params_p)
+    //    ,.sets_p(sets_p)
+    //    ,.assoc_p(assoc_p)
+    //    ,.block_width_p(block_width_p)
+    //    ,.fill_width_p(fill_width_p)
+    //    )
+    //  lce_tracer
+    //   (.clk_i(clk_i & testbench.lce_trace_en)
+    //    ,.reset_i(reset_i)
+    //    ,.lce_id_i(lce_id_i)
 
-        ,.lce_req_header_i(lce_req_header_o)
-        ,.lce_req_header_v_i(lce_req_header_v_o)
-        ,.lce_req_header_ready_and_i(lce_req_header_ready_and_i)
-        ,.lce_req_data_i(lce_req_data_o)
-        ,.lce_req_data_v_i(lce_req_data_v_o)
-        ,.lce_req_data_ready_and_i(lce_req_data_ready_and_i)
+    //    ,.lce_req_header_i(lce_req_header_o)
+    //    ,.lce_req_header_v_i(lce_req_header_v_o)
+    //    ,.lce_req_header_ready_and_i(lce_req_header_ready_and_i)
+    //    ,.lce_req_data_i(lce_req_data_o)
+    //    ,.lce_req_data_v_i(lce_req_data_v_o)
+    //    ,.lce_req_data_ready_and_i(lce_req_data_ready_and_i)
 
-        ,.lce_cmd_header_i(lce_cmd_header_i)
-        ,.lce_cmd_header_v_i(lce_cmd_header_v_i)
-        ,.lce_cmd_header_ready_and_i(lce_cmd_header_ready_and_o)
-        ,.lce_cmd_data_i(lce_cmd_data_i)
-        ,.lce_cmd_data_v_i(lce_cmd_data_v_i)
-        ,.lce_cmd_data_ready_and_i(lce_cmd_data_ready_and_o)
+    //    ,.lce_cmd_header_i(lce_cmd_header_i)
+    //    ,.lce_cmd_header_v_i(lce_cmd_header_v_i)
+    //    ,.lce_cmd_header_ready_and_i(lce_cmd_header_ready_and_o)
+    //    ,.lce_cmd_data_i(lce_cmd_data_i)
+    //    ,.lce_cmd_data_v_i(lce_cmd_data_v_i)
+    //    ,.lce_cmd_data_ready_and_i(lce_cmd_data_ready_and_o)
 
-        ,.lce_fill_header_i(lce_fill_header_i)
-        ,.lce_fill_header_v_i(lce_fill_header_v_i)
-        ,.lce_fill_header_ready_and_i(lce_fill_header_ready_and_o)
-        ,.lce_fill_data_i(lce_fill_data_i)
-        ,.lce_fill_data_v_i(lce_fill_data_v_i)
-        ,.lce_fill_data_ready_and_i(lce_fill_data_ready_and_o)
+    //    ,.lce_fill_header_i(lce_fill_header_i)
+    //    ,.lce_fill_header_v_i(lce_fill_header_v_i)
+    //    ,.lce_fill_header_ready_and_i(lce_fill_header_ready_and_o)
+    //    ,.lce_fill_data_i(lce_fill_data_i)
+    //    ,.lce_fill_data_v_i(lce_fill_data_v_i)
+    //    ,.lce_fill_data_ready_and_i(lce_fill_data_ready_and_o)
 
-        ,.lce_fill_o_header_i(lce_fill_header_o)
-        ,.lce_fill_o_header_v_i(lce_fill_header_v_o)
-        ,.lce_fill_o_header_ready_and_i(lce_fill_header_ready_and_i)
-        ,.lce_fill_o_data_i(lce_fill_data_o)
-        ,.lce_fill_o_data_v_i(lce_fill_data_v_o)
-        ,.lce_fill_o_data_ready_and_i(lce_fill_data_ready_and_i)
+    //    ,.lce_fill_o_header_i(lce_fill_header_o)
+    //    ,.lce_fill_o_header_v_i(lce_fill_header_v_o)
+    //    ,.lce_fill_o_header_ready_and_i(lce_fill_header_ready_and_i)
+    //    ,.lce_fill_o_data_i(lce_fill_data_o)
+    //    ,.lce_fill_o_data_v_i(lce_fill_data_v_o)
+    //    ,.lce_fill_o_data_ready_and_i(lce_fill_data_ready_and_i)
 
-        ,.lce_resp_header_i(lce_resp_header_o)
-        ,.lce_resp_header_v_i(lce_resp_header_v_o)
-        ,.lce_resp_header_ready_and_i(lce_resp_header_ready_and_i)
-        ,.lce_resp_data_i(lce_resp_data_o)
-        ,.lce_resp_data_v_i(lce_resp_data_v_o)
-        ,.lce_resp_data_ready_and_i(lce_resp_data_ready_and_i)
+    //    ,.lce_resp_header_i(lce_resp_header_o)
+    //    ,.lce_resp_header_v_i(lce_resp_header_v_o)
+    //    ,.lce_resp_header_ready_and_i(lce_resp_header_ready_and_i)
+    //    ,.lce_resp_data_i(lce_resp_data_o)
+    //    ,.lce_resp_data_v_i(lce_resp_data_v_o)
+    //    ,.lce_resp_data_ready_and_i(lce_resp_data_ready_and_i)
 
-        ,.cache_req_complete_i(cache_req_complete_o)
-        ,.uc_store_req_complete_i(uc_store_req_complete_lo)
-        );
+    //    ,.cache_req_complete_i(cache_req_complete_o)
+    //    ,.uc_store_req_complete_i(uc_store_req_complete_lo)
+    //    );
 
   bind bp_me_nonsynth_cache
     bp_me_nonsynth_tr_tracer
