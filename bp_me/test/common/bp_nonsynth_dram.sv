@@ -221,7 +221,7 @@ module bp_nonsynth_dram
     begin : axi
       localparam axi_id_width_p = 6;
       localparam axi_addr_width_p = 64;
-      localparam axi_data_width_p = 1024;
+      localparam axi_data_width_p = l2_block_width_p;
       localparam axi_strb_width_p = axi_data_width_p >> 3;
       localparam axi_burst_len_p = 1;
 
