@@ -23,6 +23,7 @@
     ,e_size_16B  = 3'b100
     ,e_size_32B  = 3'b101
     ,e_size_64B  = 3'b110
+    ,e_size_128B = 3'b111
   } bp_cache_req_size_e;
 
   // Relevant for uc_store and uc_amo

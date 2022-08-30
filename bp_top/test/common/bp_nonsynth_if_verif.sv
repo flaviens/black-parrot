@@ -114,12 +114,12 @@ module bp_nonsynth_if_verif
   // L2 Cache
   if (l2_fill_width_p < l2_data_width_p)
     $error("Error: L2 fill width must be at least as large as L2 data width");
-  if (l2_block_width_p != 512)
-    $error("Error: L2 block width must be 512");
   if (!`BSG_IS_POW2((l2_fill_width_p/l2_data_width_p)))
     $error("Error: L2 fill width must be POW2 multiple of L2 data width");
   if (!`BSG_IS_POW2(l2_banks_p))
     $error("Error: L2 banks must be a power of two");
+  if (l2_block_width_p < icache_block_width_p || l2_block_width_p < dcache_block_width_p)
+    $error("Error: L2 block width must be at least L1 block width");
 
   // Unicore
   if ((cce_type_p == e_cce_uce) && (uce_fill_width_p != l2_data_width_p))

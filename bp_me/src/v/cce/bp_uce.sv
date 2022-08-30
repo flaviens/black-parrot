@@ -89,15 +89,7 @@ module bp_uce
   localparam bank_sub_offset_width_lp = $clog2(fill_size_in_bank_lp);
 
   // Block size parameterisations
-  localparam bp_bedrock_msg_size_e block_msg_size_lp = (block_width_p == 512)
-                                                       ? e_bedrock_msg_size_64
-                                                       : (block_width_p == 256)
-                                                         ? e_bedrock_msg_size_32
-                                                         : (block_width_p == 128)
-                                                           ? e_bedrock_msg_size_16
-                                                           : (block_width_p == 64)
-                                                             ? e_bedrock_msg_size_8
-                                                             : e_bedrock_msg_size_64;
+  localparam bp_bedrock_msg_size_e block_msg_size_lp = bp_bedrock_msg_size_e'(`BSG_SAFE_CLOG2(block_width_p/8));
 
   `declare_bp_bedrock_mem_if(paddr_width_p, did_width_p, lce_id_width_p, lce_assoc_p);
   `declare_bp_cache_engine_if(paddr_width_p, ctag_width_p, sets_p, assoc_p, dword_width_gp, block_width_p, fill_width_p, cache);

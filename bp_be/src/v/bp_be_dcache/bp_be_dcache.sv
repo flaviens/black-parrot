@@ -1345,9 +1345,9 @@ module bp_be_dcache
         else $error("multiple hit: %b. id = %0d. addr = %H", load_hit_tl, cfg_bus_cast_i.dcache_id, ptag_i);
     end
 
-  if (!(assoc_p == 8 | assoc_p == 4 | assoc_p == 2 | assoc_p == 1))
+  if (!(assoc_p == 16 | assoc_p == 8 | assoc_p == 4 | assoc_p == 2 | assoc_p == 1))
     begin
-      $error("assoc_p has to be 8, 4, 2 or 1");
+      $error("assoc_p has to be 16, 8, 4, 2 or 1");
     end
   // synopsys translate_on
 
