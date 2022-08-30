@@ -36,16 +36,10 @@ cfgs=(\
     "e_bp_multicore_2_cce_ucode_cfg"
     "e_bp_multicore_2_cfg"
     "e_bp_multicore_1_cce_ucode_cfg"
-    "e_bp_multicore_1_l1_medium_cfg"
-    "e_bp_multicore_1_l1_small_cfg"
     "e_bp_multicore_1_cfg"
 
-    "e_bp_unicore_writethrough_cfg"
-    "e_bp_unicore_l1_wide_cfg"
-    "e_bp_unicore_l1_hetero_cfg"
-    "e_bp_unicore_l1_tiny_cfg"
-    "e_bp_unicore_l1_medium_cfg"
-    "e_bp_unicore_l1_small_cfg"
+    "e_bp_unicore_megaparrot_cfg"
+    "e_bp_unicore_tinyparrot_cfg"
     "e_bp_unicore_cfg"
     )
 
