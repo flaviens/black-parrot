@@ -896,18 +896,18 @@ module bp_be_dcache
             cache_req_cast_o.size = e_size_1B;
         end
 
-      unique casez ({decode_tv_r.amo_op, decode_tv_r.amo_subop})
-        {1'b1, e_dcache_subop_lr     }: cache_req_cast_o.subop = e_req_amolr;
-        {1'b1, e_dcache_subop_sc     }: cache_req_cast_o.subop = e_req_amosc;
-        {1'b1, e_dcache_subop_amoswap}: cache_req_cast_o.subop = e_req_amoswap;
-        {1'b1, e_dcache_subop_amoadd }: cache_req_cast_o.subop = e_req_amoadd;
-        {1'b1, e_dcache_subop_amoxor }: cache_req_cast_o.subop = e_req_amoxor;
-        {1'b1, e_dcache_subop_amoand }: cache_req_cast_o.subop = e_req_amoand;
-        {1'b1, e_dcache_subop_amoor  }: cache_req_cast_o.subop = e_req_amoor;
-        {1'b1, e_dcache_subop_amomin }: cache_req_cast_o.subop = e_req_amomin;
-        {1'b1, e_dcache_subop_amomax }: cache_req_cast_o.subop = e_req_amomax;
-        {1'b1, e_dcache_subop_amominu}: cache_req_cast_o.subop = e_req_amominu;
-        {1'b1, e_dcache_subop_amomaxu}: cache_req_cast_o.subop = e_req_amomaxu;
+      unique casez ({decode_tv_r.uncached_op, decode_tv_r.amo_op, decode_tv_r.amo_subop})
+        {2'b11, e_dcache_subop_lr     }: cache_req_cast_o.subop = e_req_amolr;
+        {2'b11, e_dcache_subop_sc     }: cache_req_cast_o.subop = e_req_amosc;
+        {2'b11, e_dcache_subop_amoswap}: cache_req_cast_o.subop = e_req_amoswap;
+        {2'b11, e_dcache_subop_amoadd }: cache_req_cast_o.subop = e_req_amoadd;
+        {2'b11, e_dcache_subop_amoxor }: cache_req_cast_o.subop = e_req_amoxor;
+        {2'b11, e_dcache_subop_amoand }: cache_req_cast_o.subop = e_req_amoand;
+        {2'b11, e_dcache_subop_amoor  }: cache_req_cast_o.subop = e_req_amoor;
+        {2'b11, e_dcache_subop_amomin }: cache_req_cast_o.subop = e_req_amomin;
+        {2'b11, e_dcache_subop_amomax }: cache_req_cast_o.subop = e_req_amomax;
+        {2'b11, e_dcache_subop_amominu}: cache_req_cast_o.subop = e_req_amominu;
+        {2'b11, e_dcache_subop_amomaxu}: cache_req_cast_o.subop = e_req_amomaxu;
         default: cache_req_cast_o.subop = e_req_store;
       endcase
 
@@ -1205,14 +1205,26 @@ module bp_be_dcache
          ,.v_i(dirty_mask_v_li)
          ,.o(dirty_mask_lo)
          );
+    end
+  else
+    begin : ntd
+      // We don't track dirty
+      // Note: This will synthesize out of stat_mem...unless hardened
+      assign dirty_mask_lo = '0;
+    end
 
-      // Maintain a global dirty bit for the cache. When data is written to the write buffer, we set
+  if (coherent_p == 0)
+    begin : gd
+      // Maintain a global dirty bit for the cache. When data is written, we set
       //   it. When we send a flush request to the CE, we clear it.
       // The way this works with fence.i is:
       //   1) If dirty bit is set, we force a miss and send off a flush request to the CE
       //   2) If dirty bit is not set, we do not send a request and simply return valid flush.
-      //        The CSR unit is now responsible for sending the clear request to the I$.
-      wire set_dirty = wbuf_v_li;
+      //        A clear request is now sent to I$ through the FE exception mechanism
+      // For a non-coherent writeback cache, we set the dirty when we have a store hit
+      // For a non-coherent writethrough write-no-allocate cache, we set the dirty regardless of hit
+      // For a coherent cache, we never set the dirty bit as the coherence system should handle it
+      wire set_dirty = v_tv_r & decode_tv_r.store_op & (store_hit_tv | writethrough_p == 1);
       wire clear_dirty = (cache_req_complete_i & decode_tv_r.fencei_op);
       bsg_dff_reset_set_clear
        #(.width_p(1))
@@ -1226,11 +1238,8 @@ module bp_be_dcache
         );
     end
   else
-    begin : ntd
-      // We don't track dirty
-      // Note: This will synthesize out of stat_mem...unless hardened
-      assign dirty_mask_lo = '0;
-      assign gdirty_r     = '0;
+    begin : ngd
+      assign gdirty_r = '0;
     end
 
   always_comb
