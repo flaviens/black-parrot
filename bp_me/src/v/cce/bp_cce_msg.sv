@@ -27,7 +27,7 @@ module bp_cce_msg
     , localparam lg_num_way_groups_lp      = `BSG_SAFE_CLOG2(num_way_groups_lp)
 
     // counter width for memory command/response data packet counters
-    , localparam counter_width_lp          = 8
+    , localparam counter_width_lp          = 9
 
     // byte offset bits required per bedrock data channel beat
     , localparam lg_bedrock_data_bytes_lp = `BSG_SAFE_CLOG2(bedrock_data_width_p/8)

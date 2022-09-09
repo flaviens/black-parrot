@@ -37,6 +37,10 @@ else
 	export AMOEN ?= $(_AMOEN)
 endif
 
+e_bp_multicore_1_cce_ucode_megaparrot_cfg_paddr_width  := 56
+e_bp_multicore_1_cce_ucode_tinyparrot_cfg_paddr_width  := 33
+e_bp_multicore_1_megaparrot_cfg_paddr_width            := 56
+e_bp_multicore_1_tinyparrot_cfg_paddr_width            := 33
 e_bp_unicore_megaparrot_cfg_paddr_width                := 56
 e_bp_unicore_tinyparrot_cfg_paddr_width                := 33
 e_bp_default_cfg_paddr_width                           := 40
