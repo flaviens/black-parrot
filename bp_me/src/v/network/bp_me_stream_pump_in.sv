@@ -120,7 +120,7 @@ module bp_me_stream_pump_in
   wire any_stream = fsm_stream | msg_stream;
 
   logic cnt_up;
-  wire cnt_set = fsm_yumi_i & fsm_new_o;
+  wire cnt_set = fsm_v_o & fsm_new_o;
   wire [stream_cnt_width_lp-1:0] size_li = fsm_stream ? stream_size : '0;
   wire [stream_cnt_width_lp-1:0] first_cnt = msg_header_li.addr[stream_offset_width_lp+:stream_cnt_width_lp];
   bp_me_stream_pump_control
@@ -141,7 +141,7 @@ module bp_me_stream_pump_in
 
   wire [paddr_width_p-1:0] wrap_addr =
     {msg_header_li.addr[paddr_width_p-1:block_offset_width_lp]
-     ,{stream_words_lp>0{fsm_cnt_o}}
+     ,{stream_words_lp>1{fsm_cnt_o}}
      ,msg_header_li.addr[0+:stream_offset_width_lp]
      };
 
@@ -166,7 +166,7 @@ module bp_me_stream_pump_in
           // N:1
           // consume all but last msg input beat silently, then FSM consumes last beat
           fsm_v_o = msg_v_li & fsm_last_o;
-          msg_yumi_lo = ~fsm_last_o | fsm_yumi_i;
+          msg_yumi_lo = (msg_v_li & ~fsm_last_o) | fsm_yumi_i;
           cnt_up = msg_v_li & msg_yumi_lo;
           // Hold address constant at critical address
           fsm_addr_o = msg_header_li.addr;

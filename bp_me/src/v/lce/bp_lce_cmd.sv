@@ -216,20 +216,22 @@ module bp_lce_cmd
   // size and first_cnt held constant by not dequeueing command header until all data consumed
   // increment count as each data beat is forwarded to cache
   logic [fill_select_width_lp-1:0] wrap_cnt, wrap_size;
-  logic wrap_cnt_set, wrap_cnt_up;
-  bsg_counter_set_en
-   #(.max_val_p(block_size_in_fill_lp-1), .reset_val_p('0))
+  logic wrap_cnt_set, wrap_cnt_up, wrap_cnt_last;
+  bp_me_stream_pump_control
+   #(.max_val_p(block_size_in_fill_lp-1))
    wrap_counter
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
      ,.set_i(wrap_cnt_set)
-     ,.en_i(wrap_cnt_up)
+     ,.size_i('1)
      ,.val_i(first_cnt)
-     ,.count_o(wrap_cnt)
+     ,.en_i(wrap_cnt_up)
+
+     ,.wrap_o(wrap_cnt)
+     ,.first_o()
+     ,.last_o(wrap_cnt_last)
      );
-  wire [fill_select_width_lp-1:0] last_cnt = first_cnt + wrap_size;
-  wire is_last_cnt = (wrap_cnt == last_cnt);
 
   // decode wrap around count into one-hot fill index for data mem packet
   logic [block_size_in_fill_lp-1:0] fill_index, fill_index_li;
@@ -754,7 +756,7 @@ module bp_lce_cmd
       e_tr_data: begin
 
         lce_fill_data_o = dirty_data_selected;
-        lce_fill_last_o = is_last_cnt;
+        lce_fill_last_o = wrap_cnt_last;
         lce_fill_data_v_o = 1'b1;
 
         // hold wraparound counter size input constant
@@ -860,7 +862,7 @@ module bp_lce_cmd
       e_wb_dirty_send_data: begin
 
         lce_resp_data_o = dirty_data_selected;
-        lce_resp_last_o = is_last_cnt;
+        lce_resp_last_o = wrap_cnt_last;
         lce_resp_data_v_o = 1'b1;
 
         // hold wraparound counter size input constant
