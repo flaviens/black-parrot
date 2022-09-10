@@ -411,7 +411,7 @@ module testbench
 
            ,.cache_req_yumi_i(calculator.pipe_mem.dcache.cache_req_yumi_i)
            ,.cache_req_complete_i(calculator.pipe_mem.dcache.cache_req_complete_i)
-           ,.cache_req_nonblocking_i(calculator.pipe_mem.dcache.nonblocking_req)
+           ,.cache_req_pending_set_i(calculator.pipe_mem.dcache.pending_set)
 
            ,.cosim_clk_i(testbench.cosim_clk_i)
            ,.cosim_reset_i(testbench.cosim_reset_i)
