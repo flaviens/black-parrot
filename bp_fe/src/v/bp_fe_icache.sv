@@ -123,11 +123,6 @@ module bp_fe_icache
   localparam block_size_in_fill_lp  = block_width_p / fill_width_p;
   localparam fill_size_in_bank_lp   = fill_width_p / bank_width_lp;
 
-  // State machine declaration
-  enum logic [1:0] {e_ready, e_miss} state_n, state_r;
-  wire is_ready   = (state_r == e_ready);
-  wire is_miss    = (state_r == e_miss);
-
   // Feedback signals between stages
   logic tl_we, tv_we;
   logic v_tl_r, v_tv_r;
@@ -135,6 +130,7 @@ module bp_fe_icache
   // Uncached storage
   logic [dword_width_gp-1:0] uncached_data_r;
   logic uncached_pending_r;
+  logic pending_r;
 
   /////////////////////////////////////////////////////////////////////////////
   // Decode stage
@@ -441,26 +437,21 @@ module bp_fe_icache
   assign cache_req_metadata_cast_o.hit_or_repl_way = hit_or_repl_way;
   assign cache_req_metadata_cast_o.dirty = '0;
 
+  
   /////////////////////////////////////////////////////////////////////////////
-  // State machine
-  //   e_ready  : Cache is ready to accept requests
-  //   e_miss   : Cache is waiting for a cache request to be serviced
+  // Pending
   /////////////////////////////////////////////////////////////////////////////
-  always_comb
-    case (state_r)
-      e_ready  : state_n = cache_req_yumi_i ? e_miss : e_ready;
-      e_miss   : state_n = cache_req_complete_i ? e_ready : e_miss;
-      default: state_n = e_ready;
-    endcase
+  bsg_dff_reset_set_clear
+   #(.width_p(1))
+   pending_reg
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+     ,.set_i(cache_req_yumi_i)
+     ,.clear_i(cache_req_complete_i)
+     ,.data_o(pending_r)
+     );
 
-  //synopsys sync_set_reset "reset_i"
-  always_ff @(posedge clk_i)
-    if (reset_i)
-      state_r <= e_ready;
-    else
-      state_r <= state_n;
-
-  assign ready_o = is_ready & ~cache_req_busy_i;
+  assign ready_o = ~cache_req_busy_i & ~pending_r;
 
   /////////////////////////////////////////////////////////////////////////////
   // SRAM Control
