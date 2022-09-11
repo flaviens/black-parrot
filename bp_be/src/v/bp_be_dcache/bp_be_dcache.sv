@@ -371,7 +371,7 @@ module bp_be_dcache
   // TV Stage
   /////////////////////////////////////////////////////////////////////////////
   localparam snoop_offset_width_lp = `BSG_SAFE_CLOG2(fill_width_p/dword_width_gp);
-  logic uncached_op_tv_r, cached_op_tv_r, dram_op_tv_r, fill_tv_r;
+  logic uncached_op_tv_r, cached_op_tv_r, dram_op_tv_r, fill_ld_tv_r, fill_tv_r;
   logic [paddr_width_p-1:0] paddr_tv_r;
   logic [dword_width_gp-1:0] st_data_tv_r;
   rv64_fflags_s st_fflags_tv_r;
