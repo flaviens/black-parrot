@@ -22,6 +22,7 @@
   {
     logic                         load_op;
     logic                         store_op;
+    logic                         ret_op;
     logic                         signed_op;
     logic                         float_op;
     logic                         double_op;
