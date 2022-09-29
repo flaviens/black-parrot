@@ -33,6 +33,7 @@ module bp_fe_pc_gen
    , input                                           next_pc_yumi_i
 
    , output logic                                    ovr_o
+   , input                                           if2_we_i
 
    , input [instr_width_gp-1:0]                      fetch_i
    , input                                           fetch_instr_v_i
@@ -206,10 +207,12 @@ module bp_fe_pc_gen
   logic [vaddr_width_p-1:0] pc_if1_r;
   bp_fe_branch_metadata_fwd_s metadata_if1_r;
   logic pred_if1_r, taken_if1_r;
-  bsg_dff
+  bsg_dff_reset_en
    #(.width_p(2+branch_metadata_fwd_width_p+vaddr_width_p))
    if1_stage_reg
     (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+     ,.en_i(next_pc_yumi_i)
 
      ,.data_i({next_pred, next_taken, next_metadata, next_pc})
      ,.data_o({pred_if1_r, taken_if1_r, metadata_if1_r, pc_if1_r})
@@ -244,10 +247,12 @@ module bp_fe_pc_gen
   logic [vaddr_width_p-1:0] pc_if2_r;
   logic pred_if2_r, taken_if2_r;
   bp_fe_branch_metadata_fwd_s metadata_if2_r;
-  bsg_dff
+  bsg_dff_reset_en
    #(.width_p(2+branch_metadata_fwd_width_p+vaddr_width_p))
    if2_stage_reg
     (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+     ,.en_i(if2_we_i)
 
      ,.data_i({pred_if1_r, taken_if1_r, metadata_if1, pc_if1_r})
      ,.data_o({pred_if2_r, taken_if2_r, metadata_if2_r, pc_if2_r})
