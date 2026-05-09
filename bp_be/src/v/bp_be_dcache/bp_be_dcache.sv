@@ -553,7 +553,7 @@ module bp_be_dcache
 
   assign wbuf_v_li = v_tv_r
     & decode_tv_r.store_op & store_hit_tv & ~sc_fail_tv & ~uncached_tv_r
-    & ~any_miss_tv;
+    & ~any_miss_tv & ~flush_i;
 
   //
   // Atomic operations
